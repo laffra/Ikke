@@ -1,0 +1,59 @@
+<html>
+<head>
+    <link rel="chrome-webstore-item" href="https://chrome.google.com/webstore/detail/fmeadohikadcafhjaijonglpjdnncnal">
+    <style>
+        button {
+            background: lightgreen;
+            border: 1px solid grey;
+            padding: 5px;
+        }
+        button:disabled {
+            background: pink;
+
+    </style>
+</head>
+<body>
+
+<h1>IKKE Setup</h1>
+
+<div id="ikke-extension">
+    <!-- TBD
+    Enable Ikke <button onclick="setup_extension()">Enable the extension</button>
+    -->
+    Step 1: <button onclick="setup_extension_local()">Enable the extension</button>
+</div>
+
+<div id="ikke-gmail">
+    Step 2: <button onclick="setup_gmail()">Set up gmail</button>
+</div>
+
+<script>
+document.getElementById('ikke-gmail').style.display = 'none';
+
+function setup_gmail() {
+  document.location = "https://myaccount.google.com/apppasswords";
+}
+
+function setup_extension() {
+  console.log('set up extension');
+  chrome.webstore.install(
+    "https://chrome.google.com/webstore/detail/fmeadohikadcafhjaijonglpjdnncnal",
+    function ok() {
+      document.location.reload();
+    },
+    function fail(detail) {
+      alert('Installation from Chrome webstore failed. Please use the local install option.');
+      document.getElementById('ikke-extension').disabled = true;
+      document.getElementById('ikke-extension_local').disabled = false;
+    }
+  );
+}
+
+function setup_extension_local() {
+  document.location = '/extensions';
+}
+
+</script>
+
+</body>
+</html>

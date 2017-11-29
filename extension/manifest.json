@@ -1,0 +1,25 @@
+{
+   "author": "Chris Laffra - laffra@gmail.com",
+   "background": {
+      "scripts": [ "background.js" ]
+   },
+   "content_scripts": [ {
+      "all_frames": true,
+      "js": [ "jquery.js", "jquery-addons.js", "jquery-ui.min.js", "dothis.js", "setup.js", "contentscript.js" ],
+      "css": [ "jquery-ui.min.css" ],
+      "matches": [ "http://*/*", "https://*/*" ]
+   } ],
+   "description": "Ikke",
+   "manifest_version": 2,
+   "name": "Ikke",
+   "page_action": {
+      "default_icon": {
+         "38": "octopus.jpg"
+      },
+      "default_title": "Ikke"
+   },
+   "permissions": [ "tabs", "http://*/", "https://*/" ],
+   "short_name": "Ikke",
+   "update_url": "https://clients2.google.com/service/update2/crx",
+   "version": "1.4"
+}

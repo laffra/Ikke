@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<html>
+    <head>
+        <link rel="stylesheet" href="3rd/jquery-ui-1.12.1/jquery-ui.min.css">
+        <link rel="stylesheet" href="main.css">
+
+        <script src="3rd/jquery-3.2.1.min.js"></script>
+        <script src="3rd/jquery-ui-1.12.1/jquery-ui.min.js"></script>
+        <script src="3rd/cola.v3.min.js"></script>
+        <script src="3rd/d3.v4.min.js"></script>
+    </head>
+    <body>
+        <table width="100%">
+            <tr>
+                <td class="logo">
+                    <span class="t1">I</span>
+                    <span class="t2">K</span>
+                    <span class="t3">K</span>
+                    <span class="t4">E</span>
+                </td>
+                <td>
+                    <div id="toolbar">
+                        <div class="querybox">
+                            <input type="text" id="query" class="searchbox" value="{{query}}" onchange="rerender()"/>
+                            <div class="search-button">&#9906;</div>
+                        </div>
+                    </div>
+                    <div id="tabs">
+                        <ul>
+                            {% for kind in kinds %}
+                            <li remember="true"><a href="#tabs-{{kind}}">{{ kind.capitalize() }} </a></li>
+                            {% endfor %}
+                            <li><a href="#">&nbsp;&nbsp;&nbsp;</a></li>
+                            <li><a id="google" href="#">Google</a></li>
+                            <li><a id="settings" href="#">Settings</a></li>
+                        </ul>
+                        {% for kind in kinds %}
+                        <div id="tabs-{{kind}}">
+                            <div class="tab-contents">
+                                {% if kind in premium %}
+                                <pre>Premium Content...</pre>
+                                {% else %}
+                                <div id="summary-{{kind}}" class="summary"></div>
+                                <div id="zoom-buttons-{{kind}}" class="zoom-buttons">
+                                    <button class="zoom-button" id="zoom-in-{{kind}}">+</button>
+                                    <button class="zoom-button" id="zoom-out-{{kind}}">&ndash;</button>
+                                </div>
+                                <div class="spinner">
+                                    <img src="get?path=icons/loading_spinner.gif">
+                                </div>
+                                <div class="sad" id="sad-{{kind}}">
+                                    <center>
+                                        <img src="get?path=icons/sad-computer.png">
+                                        <div id="sadmessage-{{kind}}"></div>
+                                        <a href="https://www.google.com/search?q={{query}}" class="kind">Search at Google</a>
+                                    </center>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </td>
+            </tr>
+        </table>
+        <script>
+        var kinds = {{ kinds|safe }};
+        </script>
+        <script src="main.js"></script>
+    </body>
+</html>

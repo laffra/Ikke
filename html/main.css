@@ -1,0 +1,385 @@
+body {
+    margin: 0;
+    padding: 20px;
+    background: #fafafa;
+    margin-right: 87px;
+}
+
+.hidden {
+    visibility: hidden
+}
+
+text {
+    font-family: sans-serif;
+    text-shadow: -2px 0 white, 0 2px white, 2px 0 white, 0 -2px white;
+    font-size: 1px;
+}
+
+image {
+    border: 1px solid grey;
+}
+
+.logo {
+    padding: 9px 15px;
+    font-family: Arial;
+    vertical-align: top;
+    font-weight: bold;
+    white-space: nowrap;
+    width: 53px;
+    font-size: 27px;
+}
+
+.logo .t1 {
+    color: #0057e7;
+}
+
+.logo .t2 {
+    color: #ffa700;
+}
+
+.logo .t3 {
+    color: #d62d20;
+}
+
+.logo .t4 {
+    color: #35a853;
+}
+
+#main {
+    border: 1px solid #000;
+    height: 100vh;
+    background: white;
+}
+
+svg {
+}
+
+#toolbar {
+    margin-bottom: 8px;
+    height: 42px;
+}
+
+#query {
+    height: 33px;
+    font-size: 16px;
+    width: 500px;
+    border: 0;
+    padding-left: 12px;
+    outline: 0;
+}
+
+.querybox {
+    display: block;
+    float: left;
+    padding: 4px;
+    background-color: #fff;
+    vertical-align: top;
+    border-radius: 2px;
+    box-shadow: 0 2px 2px 0 rgba(0,0,0,0.16), 0 0 0 1px rgba(0,0,0,0.08);
+    transition: box-shadow 200ms cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+.filter {
+    font-size: 12px;
+    font-family: sans-serif;
+}
+
+.filter option {
+    font-size: 14px;
+}
+
+.filter select {
+    margin-right: 1000px;
+}
+
+label input {
+    visibility: hidden;
+    display:block;
+    height:0;
+    width:0;
+    position:absolute;
+    overflow:hidden;
+}
+
+label span {
+    height: 16px;
+    width: 16px;
+    border: 1px solid grey;
+    display: inline-block;
+    margin-bottom:1px;
+}
+
+[type=checkbox]:checked + span {
+    background: black;
+}
+
+.tab-contents {
+    height: 100%;
+    overflow: auto;
+}
+
+td {
+    overflow: hidden;
+}
+
+.ui-tabs {
+    padding: 0;
+    display: none;
+}
+.ui-tabs .ui-tabs-nav li.ui-tabs-active .ui-tabs-anchor {
+    color: #4285f4;
+}
+
+.ui-state-active a, .ui-state-active a:link, .ui-state-active a:visited {
+    color: #4285f4;
+    border-bottom: 3px solid #4285f4;
+    font-weight: bold;
+}
+
+.ui-state-default a, .ui-state-default a:link, .ui-state-default a:visited, a.ui-button, a:link.ui-button, a:visited.ui-button, .ui-button {
+    color: #777;
+    text-decoration: none;
+}
+
+.ui-state-default a:hover {
+    color: black;
+}
+
+.ui-tabs .ui-tabs-nav .ui-tabs-anchor {
+    padding: .6em .5em;
+}
+
+.ui-tabs .buttons {
+    padding: 2px;
+}
+
+.ui-tabs .buttons a {
+    color: #777;
+    text-decoration: none;
+    font-weight: normal;
+    font-size: 12px;
+}
+
+.ui-tabs .spacer {
+    margin-left: 30px;
+}
+
+.ui-tabs .buttons .dialog {
+    padding: 16px;
+    font-size: 16px;
+    font-weight: normal;
+    border-radius: 4px;
+    box-shadow: 0 4px 4px 0 rgba(0,0,0,0.16), 0 0 0 1px rgba(0,0,0,0.08);
+    transition: box-shadow 200ms cubic-bezier(0.4, 0.0, 0.2, 1);
+    background: white;
+    position: absolute;
+    text-align: left;
+    display: none;
+}
+
+.dialog span {
+    margin: 0;
+}
+
+.ui-tabs-nav a {
+    color: #777;
+    outline: 0;
+    padding: 0 8px;
+}
+
+.ui-tabs .ui-tabs-nav {
+    border: 1px solid #DDD;
+    border-width: 0 0 1px 0;
+    background: #fafafa;
+}
+
+.ui-tabs .ui-tabs-nav li {
+    border: none;
+    background: #fafafa;
+    color: #777;
+    font-size: 13px;
+}
+
+.ui-tabs .ui-tabs-panel {
+    padding: 0.1em 0.1em;
+    border: 0px solid #AAA;
+    height: 100%;
+    min-height: 1000px;
+}
+
+.link-header a {
+    color: #AAA;
+}
+
+.link-header {
+    color: #AAA;
+    font-size: 12px;
+    font-family: Arial;
+    margin-left: 16px;
+}
+
+.link-header label {
+    color: black;
+    margin-left: -2px;
+}
+
+.link {
+    color: navy;
+    text-decoration: none;
+}
+
+.link:hover {
+    text-decoration: underline;
+}
+
+#grid {
+    position: absolute;
+    width: 900px;
+    right: 1px;
+    margin: 2px;
+}
+
+.view {
+    opacity: 0;
+    border: none;
+}
+
+.stats {
+    font-size: 9px;
+    margin: 8px;
+    color: #555;
+    z-index: 1;
+    position: absolute;
+}
+
+.summary-link {
+    display: inline-block;
+}
+
+.summary {
+    font-size: 14px;
+    margin: 8px 0 0 4px;
+    color: #777;
+    overflow: hidden;
+    height: 22px;
+}
+
+.summary a {
+    color: #777;
+}
+
+.search-button {
+    -webkit-transform: rotate(45deg);
+    -moz-transform: rotate(45deg);
+    -o-transform: rotate(45deg);
+    transform: rotate(-45deg);
+    color: #4285f4;
+    width: 32px;
+    float: right;
+    font-weight: bold;
+    font-size: 24px;
+    margin-top: -4px;
+    margin-right: -4px;
+    cursor: pointer;
+}
+
+.zoom-buttons {
+    display: none;
+    position: absolute;
+    z-index: 200;
+    padding: 5px;
+    top: 85px;
+}
+
+.zoom-buttons button {
+    background-color: white;
+    border-radius: 2px;
+    display: block;
+    width: 29px;
+    height: 29px;
+    cursor: pointer;
+    border: 1px solid #EEE;
+    margin-top: -1px;
+    color: #999;
+    outline: 0;
+    transition: background-color 0.3s ease-out
+}
+
+table.ui-table {
+    border: 1px solid #ddd;
+    font-size: 14px;
+}
+
+table.ui-table th, table.ui-table td {
+    cursor: pointer;
+    border-bottom: 1px solid #ddd;
+    padding: 3px;
+    text-align: left;
+    vertical-align: top;
+}
+
+table.ui-table th {
+    padding-top: 4px;
+    padding-bottom: 4px;
+    text-align: left;
+    background-color: #bababa;
+    color: white;
+}
+
+table.ui-table tr:nth-child(even) {
+    background-color: #f2f2f2;
+}
+
+table.ui-table {
+    border-collapse: collapse;
+}
+
+table.ui-table tr:hover {
+    background-color: lightblue;
+}
+
+.background {
+    background: white;
+}
+
+.sad {
+    display: none;
+    margin: 100px;
+    width: 500px;
+}
+
+.sad img {
+    width: 120px;
+    margin-bottom: 15px;
+}
+
+.sad div {
+    font-size: 14px;
+    font-family: Arial;
+    margin-bottom: 12px;
+}
+
+.sad a {
+    font-size: 14px;
+    font-family: Arial;
+    color: navy;
+}
+
+.spinner {
+    display: block;
+    margin: 100px;
+    padding-left: 200px;
+}
+
+.spinner img {
+    width: 120px;
+}
+
+#tabs {
+    border-width: 0;
+    height: 100%;
+    display: none;
+}
+
+.searchbox {
+}

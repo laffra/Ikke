@@ -1,0 +1,77 @@
+<html>
+<head>
+</head>
+<body>
+
+<h1>Add the IKKE Extension</h1>
+
+Please complete these steps:
+<ol>
+    <li>
+        Open a new Chrome tab
+        <br><br>
+    </li>
+    <li>
+        Enter <tt>chrome://extensions</tt> in the address bar
+        <br><br>
+    </li>
+    <li>
+        Check the "Developer mode" option at the top of the page
+        <br><br>
+    </li>
+    <li>
+        Click on the button saying "Load unpacked extension..."
+        <br><br>
+    </li>
+    <li>
+        Select <tt>{{location}}</tt> as the location for the extension to install
+        <br><br>
+    </li>
+    <li>
+        Verify the extension is actually enabled, you may need to scroll down a little bit
+        <br><br>
+    </li>
+    <li>
+        Finish the installation by clicking <a href="/">here</a>
+        <br><br>
+    </li>
+</ol>
+
+<script>
+if (chrome.app.isInstalled) {
+  document.getElementById('gmail').disabled = false;
+  document.getElementById('extension').disabled = true;
+  document.getElementById('extension_local').disabled = true;
+} else {
+  document.getElementById('gmail').disabled = true;
+  document.getElementById('extension').disabled = false;
+  document.getElementById('extension_local').disabled = true;
+}
+
+function setup_gmail() {
+  document.location = "https://myaccount.google.com/apppasswords";
+}
+
+function setup_extension() {
+  console.log('set up extension');
+  chrome.webstore.install(
+    "https://chrome.google.com/webstore/detail/fmeadohikadcafhjaijonglpjdnncnal",
+    function ok() {
+      document.location.reload();
+    },
+    function fail(detail) {
+      alert('Installation from Chrome webstore failed. Please use the local install option.');
+      document.getElementById('extension').disabled = true;
+      document.getElementById('extension_local').disabled = false;
+    }
+  );
+}
+
+function setup_extension_local() {
+  document.location = '/extensions';
+}
+
+</script>
+
+</body>
+</html>
