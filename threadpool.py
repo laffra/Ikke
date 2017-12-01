@@ -1,4 +1,10 @@
-from queue import Queue
+
+import sys
+if sys.version_info >= (3,):
+    from queue import Queue
+else:
+    from Queue import Queue
+
 from threading import Thread
 import traceback
 
@@ -25,7 +31,8 @@ class Worker(Thread):
 
 class ThreadPool:
     """ Pool of threads consuming tasks from a queue """
-    def __init__(self, task_count:int, tasks=None):
+    def __init__(self, task_count, tasks=None):
+        # type (int,list) -> None
         self.tasks = Queue(task_count)
         for _ in range(task_count):
             Worker(self.tasks)

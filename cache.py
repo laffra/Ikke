@@ -1,7 +1,8 @@
 import time
 
 class Cache(dict):
-    def __init__(self, expiration:int, *args, **kwargs):
+    def __init__(self, expiration, *args, **kwargs):
+        # type (int,*,*) -> None
         dict.__init__(self)
         self.expiration = expiration
         self.update(*args, **kwargs)

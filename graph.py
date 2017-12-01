@@ -1,6 +1,13 @@
 from collections import defaultdict
 import json
-import urllib.parse
+
+import sys
+if sys.version_info >= (3,):
+    from urllib.parse import unquote
+else:
+    from urllib import url2pathname as unquote
+
+
 import time
 
 from importers import browser
@@ -58,7 +65,7 @@ class Graph:
 
     def search_me(self, timestamp):
         start_time = time.time()
-        all_items = Storage.search(urllib.parse.unquote(self.query), timestamp)
+        all_items = Storage.search(unquote(self.query), timestamp)
         duration = time.time() - start_time
         self.add_result('all', all_items, duration)
         for kind in MY_ITEM_KINDS:

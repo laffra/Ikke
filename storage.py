@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import cache
 import datetime
 from importlib import import_module
@@ -9,7 +11,17 @@ import stat
 import stopwords
 import subprocess
 import time
-import urllib.parse
+
+import sys
+if sys.version_info >= (3,):
+    from json.decoder import JSONDecodeError
+    from urllib.parse import quote
+    from urllib.parse import unquote
+else:
+    JSONDecodeError = ValueError
+    from urllib import pathname2url as quote
+    from urllib import url2pathname as unquote
+
 import uuid
 from collections import defaultdict
 
@@ -61,7 +73,8 @@ class Storage:
     file_cache = cache.Cache(60)
 
     @classmethod
-    def add_data(cls, data:dict):
+    def add_data(cls, data):
+        # type: (dict) -> None
         cls.add_file(
             cls.get_filename(data),
             json.dumps(data),
@@ -70,7 +83,8 @@ class Storage:
         )
 
     @classmethod
-    def add_binary_data(cls, content:bytes, data:dict):
+    def add_binary_data(cls, content, data):
+        # type: (bytes,dict) -> None
         cls.add_file(
             cls.get_filename(data, extension=''),
             content,
@@ -79,7 +93,8 @@ class Storage:
         )
 
     @classmethod
-    def get_local_path(cls, path:str):
+    def get_local_path(cls, path):
+        # type: (str) -> str
         local_path = os.path.join(HOME_DIR, path)
         if os.name == 'nt':
             if os.path.sep in path:
@@ -89,7 +104,8 @@ class Storage:
         return local_path
 
     @classmethod
-    def add_file(cls, filename:str, body:bytes, data:dict, format:str="wb"):
+    def add_file(cls, filename, body, data, format="wb"):
+        # type: (str,bytes,dict,str) -> None
         assert 'kind' in data, "Kind needed"
         assert 'uid' in data, "UID needed"
         assert 'timestamp' in data, "Timestamp needed"
@@ -100,12 +116,13 @@ class Storage:
                 fout.write(body)
             os.utime(path, (data['timestamp'], data['timestamp']))
             print('STORAGE: Add', path)
-        except FileNotFoundError as e:
+        except IOError as e:
             print(e)
             raise
 
     @classmethod
-    def included(cls, obj:dict, timestamp:float):
+    def included(cls, obj, timestamp):
+        # type: (dict,float) -> bool
         return obj and timestamp < obj['timestamp']
 
     @classmethod
@@ -113,13 +130,16 @@ class Storage:
         if os.name == 'nt':
             localdir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'localsearch')
             return ['cscript', '/nologo', os.path.join(localdir, 'search.vbs'), HOME_DIR, query]
-        elif os.name == 'mac':
+        elif os.name == 'posix':
             operator = '-interpret'
             operands = (query + ' ') if operator == '-interpret' else query
             return ['mdfind', '-onlyin', HOME_DIR, operator, operands]
+        else:
+            raise ValueError('Unsupported OS:', os.name)
 
     @classmethod
-    def search(cls, query:str, timestamp:float=0.0, operator:str='-interpret'):
+    def search(cls, query, timestamp, operator='-interpret'):
+        # type: (str,float,str) -> list
         assert isinstance(query, str)
         assert isinstance(timestamp, float), 'unexpected type %s: %s' % (type(timestamp), timestamp)
         key = '%s-%d' % (query, timestamp % 60)
@@ -139,13 +159,14 @@ class Storage:
         return results
 
     @classmethod
-    def get_filename(cls, data:dict, extension:str='.txt') -> str:
+    def get_filename(cls, data, extension='.txt'):
+        # type: (dict,str) -> str
         handler = import_module('importers.%s' % data['kind'])
         def serialize(value):
             if isinstance(value, list):
-                quoted = [urllib.parse.quote(v, safe='') for v in value]
+                quoted = [quote(v, safe='') for v in value]
                 return '[%s%s%s%s' % (os.path.sep, len(quoted), os.path.sep, os.path.sep.join(quoted))
-            return urllib.parse.quote(str(value), '')[:250]
+            return quote(str(value), '')[:250]
         kv = [(k,serialize(v)) for k,v in data.items() if k in handler.PATH_ATTRIBUTES and v]
         kv = sorted(kv, key=lambda kv: kv[0])
         segments = os.path.sep.join(itertools.chain(*kv)).split(os.path.sep)
@@ -153,8 +174,9 @@ class Storage:
         return os.path.join(data['kind'], '%s%s' % (path, extension))
 
     @classmethod
-    def search_contact(cls, email:str) -> dict:
-        path = os.path.join(HOME_DIR, 'contact', 'email', urllib.parse.quote(email))
+    def search_contact(cls, email):
+        # type: (str) -> dict
+        path = os.path.join(HOME_DIR, 'contact', 'email', quote(email))
         for root, dirs, files in os.walk(path):
             for file in files:
                 with open(os.path.join(root, file), 'r') as f:
@@ -165,11 +187,13 @@ class Storage:
                         pass
 
     @classmethod
-    def search_file(cls, filename:str) -> list:
+    def search_file(cls, filename):
+        # type: (str) -> list
         return cls.search(filename, operator='-name')
 
     @classmethod
-    def set_comment(cls, path:str, comment:str):
+    def set_comment(cls, path, comment):
+        # type: (str,str) -> None
         if comment:
             os.popen(SET_COMMENT_SCRIPT % (path, comment.replace('"', ' ')))
 
@@ -178,7 +202,8 @@ class Storage:
         return os.popen(GET_COMMENT_SCRIPT % path).read()
 
     @classmethod
-    def resolve(cls, path:str) -> dict:
+    def resolve(cls, path):
+        # type: (str) -> dict
         item = cls.file_cache.get(path)
         if not item:
             if path.startswith(SHORT_DIR):
@@ -191,11 +216,12 @@ class Storage:
                     except UnicodeDecodeError as e:
                         Storage.stats['failed'] += 1
                         print('STORAGE: Cannot convert binary content to json',e, path)
-                    except json.decoder.JSONDecodeError as e:
+                    except JSONDecodeError as e:
                         Storage.stats['failed'] += 1
                         print('STORAGE: Cannot convert to json',e, path)
             else:
-                kind, *kv = cls.split_path(path)
+                kv = cls.split_path(path)
+                kind, kv = kv[0], kv[1:]
                 if kind == 'file':
                     obj = File(path)
                 else:
@@ -230,7 +256,7 @@ class Storage:
     @classmethod
     def split_path(cls, path):
         return [
-            urllib.parse.unquote(p).replace('+',' ')
+            unquote(p).replace('+',' ')
             for p in path[len(HOME_DIR) + 1:].split(os.path.sep)
         ]
 
@@ -244,14 +270,18 @@ class Storage:
         return item
 
     @classmethod
-    def get_year_month_day(cls, timestamp:float):
+    def get_year_month_day(cls, timestamp):
+        # type: (float) -> tuple
         dt = datetime.datetime.fromtimestamp(timestamp)
         return '%s' % dt.year, '%02d' % dt.month, '%02d' % dt.day
 
     @classmethod
-    def run_command(cls, command:list):
-        output = subprocess.run(command, stdout=subprocess.PIPE).stdout.decode()
-        for line in output.split('\n'):
+    def run_command(cls, command):
+        # type: (list) -> str
+        print('SERVER: run', command)
+        process = subprocess.Popen(command, stdout=subprocess.PIPE)
+        stdout, stderr = process.communicate()
+        for line in stdout.split('\n'):
             yield line.strip()
 
     @classmethod
@@ -291,7 +321,7 @@ class Data(dict):
     def __eq__(self, other):
         return isinstance(other, self.__class__) and self.uid == other.uid
 
-    def update(self, obj:dict):
+    def update(self, obj):
         obj['timestamp'] = self.timestamp
 
     def is_duplicate(self, duplicates):
@@ -326,7 +356,8 @@ class File(Data):
         dict.update(self, vars(self))
 
 
-def delete_all(kind:str):
+def delete_all(kind):
+    # type (str) -> None
     path = Storage.get_local_path(kind)
     for n in range(10):
         print('Deleting all of', path, 'in', 10-n, 'seconds')

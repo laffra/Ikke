@@ -1,5 +1,7 @@
 const NORMAL_ICON_SIZE = 32;
 
+var spinner_needed = true;
+
 var RENDER_AS_GRID = localStorage.rendertype == 'grid';
 
 function init_tabs() {
@@ -9,7 +11,6 @@ function init_tabs() {
             activate : function(event, ui) {
                 if (ui.newTab.attr('remember') == 'true') {
                     localStorage.tab = ui.newTab.parent().children().index(ui.newTab);
-                    render_tab();
                 }
             }
         })
@@ -17,7 +18,6 @@ function init_tabs() {
     $('#google').click(search_google);
     $('#settings').click(settings);
 }
-init_tabs();
 
 function rerender(kind) {
     remember_filters(kind);
@@ -87,12 +87,18 @@ function render() {
     $(".spinner")
         .css('margin-top', (h/9)+"px");
 
+    init_tabs();
     query = init_filters();
     document.title = "Ikke " + query;
     $('.search-button').on('click', function() {
         rerender('all');
         document.location.reload();
     });
+    setTimeout(function() {
+        if (spinner_needed) {
+            $(".spinner").css("display", "block");
+        }
+    }, 500);
 
     window.onpopstate = function(e){
         if (e.state) {
@@ -101,18 +107,15 @@ function render() {
         }
     };
 
-    $.get("search?" + get_args(query, ''), render_tab);
-}
-
-function render_tab() {
-    kind = kinds[localStorage.getItem('tab', 0)];
-    var w = window.innerWidth;
-    var h = window.innerHeight;
-    if (RENDER_AS_GRID) {
-        load_grid(kind, w, h);
-    } else {
-        load_graph(kind, w, h);
-    }
+    $.get("search?" + get_args(query, ''), function() {
+        kinds.forEach(function(kind) {
+            if (RENDER_AS_GRID) {
+                load_grid(kind, w, h);
+            } else {
+                load_graph(kind, w, h);
+            }
+        });
+    })
 }
 
 function nobreaks(html) {
@@ -149,8 +152,8 @@ function load_grid(kind, w, h) {
                         $('<td width=20>').append(
                             $('<img>').attr('src', node.icon).css('width', '16px')
                         ),
-                        $('<td width=500>').text(node.url || node.subject || node.label),
-                        $('<td>').html(nobreaks(node.date || '')),
+                        $('<td>').text(node.url || node.subject || node.label),
+                        $('<td>').html(nobreaks(node.date)),
                         $('<td>').html(nobreaks(node.senders && node.senders[0].label || '')),
                     ]));
             }
@@ -159,6 +162,7 @@ function load_grid(kind, w, h) {
 }
 
 function clear_spinner(kind, error, graph) {
+    spinner_needed = false;
     $(".spinner").css("display", "none");
     if (error) {
         $('#stats-' + kind).text('An internal error occurred. Details: ' + error);
@@ -251,12 +255,12 @@ function load_graph(kind, w, h) {
             .force("center", d3.forceCenter(w/3, h/2))
             .force("x", d3.forceX(0.1))
             .force("y", d3.forceY(0.1))
-            .alpha(0)
-            //.alphaDecay(0.05);
+            .alpha(0.4)
+            .alphaDecay(0.05);
 
     var w = $(window).width();
     var h = $(window).height();
-    var zoom = d3.zoom().scaleExtent([0.1, 4]).on("zoom", zoomed);
+    var zoom = d3.zoom().scaleExtent([0.3, 2]).on("zoom", zoomed);
     var svg = d3.select("#tabs-" + kind)
         .append("svg")
         .style("cursor", "move")
@@ -264,22 +268,30 @@ function load_graph(kind, w, h) {
         .attr("height", h)
         .call(zoom);
     var g = svg.append("g");
+    var current_zoom_scale = 0.8;
+    zoom.scaleTo(svg, current_zoom_scale);
 
-    function zoomed() {
+    function zoomed(a, b, c) {
+        current_zoom_scale = d3.event.transform.k;
         g.style("stroke-width", 1.5 / d3.event.transform.k + "px");
         g.attr("transform", d3.event.transform);
     }
 
-    function zoomClick() {
-        alert('Sorry. The zoom buttons are not yet working. Please use mouse wheel-scroll.')
-    }
+    d3.selectAll('#zoom-in-' + kind).on('click', function() {
+        zoom.scaleTo(svg, current_zoom_scale *= 1.3);
+    });
 
-    d3.selectAll('.zoom-button').on('click', zoomClick);
+    d3.selectAll('#zoom-out-' + kind).on('click', function() {
+        zoom.scaleTo(svg, current_zoom_scale *= 0.7);
+    });
 
     d3.json("graph?" + get_args(query, kind), function(error, graph) {
         clear_spinner(kind, error, graph);
 
         update_summary(kind, graph);
+
+        zoom.scaleTo(svg, current_zoom_scale = Math.min(.8, 40/graph.nodes.length));
+        console.log('zoom to ' + current_zoom_scale);
 
         svg.insert("rect", ":first-child")
             .attr("id", "background-" + kind)
@@ -503,19 +515,14 @@ function load_graph(kind, w, h) {
 
         resize();
         d3.select(window).on("resize", resize);
-
-        force.alpha(0.5);
-        var ticks = 0;
-        while(ticks++ < 100 && force.alpha() > 0.01) {
-            force.tick();
-        }
-        shake(0.1);
+        shake(2);
     });
 }
 
 function launch(kind, label, url, path) {
-    $('#query').val(label)
-    $('svg').empty()
+    $(document.body)
+        .css('background', 'white')
+        .html('<img src="get?path=icons/loading_spinner.gif" class="spinner">');
     switch (kind) {
         case "label":
         case "contact":
@@ -550,4 +557,3 @@ $.urlParam = function(name){
 }
 
 render();
-

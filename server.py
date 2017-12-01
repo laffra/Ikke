@@ -5,13 +5,22 @@ import poller
 from settings import settings
 from storage import Storage
 
-from http import server
+import sys
+if sys.version_info >= (3,):
+    from http.server import BaseHTTPRequestHandler
+    from http.server import HTTPServer
+    from socketserver import ThreadingMixIn
+    from urllib.parse import parse_qs
+else:
+    from BaseHTTPServer import BaseHTTPRequestHandler
+    from BaseHTTPServer import HTTPServer
+    from SocketServer import ThreadingMixIn
+    from urlparse import parse_qs
+
 from importlib import import_module
 import jinja2
 import json
 import os
-import socketserver
-import urllib.parse
 import webbrowser
 
 PORT_NUMBER = 8081
@@ -20,10 +29,9 @@ SERVER_ADDRESS = ('127.0.0.1', PORT_NUMBER)
 MAIN_URL = 'http://localhost:%s' % PORT_NUMBER
 
 
-class Server(server.BaseHTTPRequestHandler):
+class Server(BaseHTTPRequestHandler):
     jinja2_env = jinja2.Environment(
-        loader = jinja2.FileSystemLoader(os.path.join(os.path.dirname(graph.__file__), 'html')),
-        autoescape = jinja2.select_autoescape(['html', 'xml'])
+        loader = jinja2.FileSystemLoader(os.path.join(os.path.dirname(graph.__file__), 'html'))
     )
     graphs = {}
     path = ''
@@ -55,7 +63,7 @@ class Server(server.BaseHTTPRequestHandler):
     def parse_args(self):
         try:
             index = self.path.index('?')
-            self.args = urllib.parse.parse_qs(self.path[index + 1:])
+            self.args = parse_qs(self.path[index + 1:])
             for k,v in self.args.items():
                 self.args[k] = v[0] if len(v) == 1 else v
             self.path = self.path[:index]
@@ -67,47 +75,51 @@ class Server(server.BaseHTTPRequestHandler):
         self.end_headers()
         html = self.jinja2_env.get_template('setup.html').render({
             'location': os.path.dirname(os.path.realpath(__file__)),
-        });
-        self.wfile.write(bytes(html, 'utf8'))
+        })
+
+    def respond(self, html, content_type=None):
+        self.send_response(200)
+        if content_type:
+            self.send_header('Content-type', content_type)
+        self.end_headers()
+        try:
+            message = bytes(html, 'utf8')
+        except:
+            message = html
+        try:
+            self.wfile.write(message)
+        except Exception as e:
+            print('SERVER: Client went away', e)
 
     def get_index(self):
         if not 'gu' in settings:
             dothis.activate('myaccount.google.com/apppasswords')
             return self.install()
 
-        self.send_response(200)
-        self.end_headers()
         html = self.jinja2_env.get_template('index.html').render({
             'query': self.args.get('q', ''),
             'kinds': graph.ALL_ITEM_KINDS,
             'kinds_string': repr(graph.ALL_ITEM_KINDS),
             'premium': graph.PREMIUM_ITEM_KINDS,
         })
-        self.wfile.write(bytes(html, 'utf8'))
+        self.respond(html)
 
     def search(self):
-        self.send_response(200)
-        self.end_headers()
         query = self.args.get('q', '')
         settings['query'] = query
         duration = self.args.get('duration', 'year')
         print('SERVER: search', duration, query)
         self.graphs[query] = graph.Graph(query, duration)
+        self.respond('OK')
 
     def get_graph(self):
         query = self.args.get('q')
         keep_duplicates = self.args.get('d', '0') == '1'
         kind = self.args['kind']
-        self.send_response(200)
-        self.end_headers()
         json_text = json.dumps(self.graphs[query].get_graph(kind, keep_duplicates))
-        try:
-            self.wfile.write(bytes(json_text, 'utf8'))
-        except Exception as e:
-            print('SERVER: Client went away', e)
+        self.respond(json_text)
 
     def get_resource(self):
-        self.send_response(200)
         path = self.args['path']
         query = self.args.get('query', '')
         # print('SERVER: get', repr(query), repr(path))
@@ -116,33 +128,23 @@ class Server(server.BaseHTTPRequestHandler):
             handler = import_module('importers.%s' % obj['kind'])
             if hasattr(handler, 'render'):
                 html = handler.render(handler.deserialize(obj), query)
-                self.send_header('Content-type', 'text/html')
-                self.end_headers()
-                self.wfile.write(bytes(html, 'utf8'))
+                self.respond(html, 'text/html')
             else:
-                self.end_headers()
                 with open(obj['path'], 'rb') as f:
-                    self.wfile.write(f.read())
+                    self.respond(f.read())
         else:
-            self.end_headers()
-            self.wfile.write(self.load_resource(path.replace(' ', '%20'), 'rb'))
+            self.respond(self.load_resource(path.replace(' ', '%20'), 'rb'))
 
     def get_jquery(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(self.load_resource('jquery.js', 'rb'))
+        self.respond(self.load_resource('jquery.js', 'rb'))
 
     def extensions(self):
-        self.send_response(200)
-        self.end_headers()
         html = self.jinja2_env.get_template('extensions.html').render({
             'location': os.path.join(os.path.dirname(os.path.realpath(__file__)), 'extension')
         })
-        self.wfile.write(bytes(html, 'utf8'))
+        self.respond(html)
 
     def load(self):
-        self.send_response(200)
-        self.end_headers()
         items = Storage.search_file('"%s"' % self.args['uid'])
         print('Found', len(items), 'items for', self.args['uid'])
         for n, item in enumerate(items):
@@ -152,23 +154,19 @@ class Server(server.BaseHTTPRequestHandler):
                 webbrowser.open(url)
                 print('webbrowser opened', n, url)
         html = '<html><script></script></html>'
-        self.wfile.write(bytes(html, 'utf8'))
+        self.respond(html)
 
     def open_local(self):
         webbrowser.open('file://%s' % self.args['path'].replace(' ', '\\ '))
 
     def dothis(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(bytes(dothis.get_work(self.args['url']), 'utf8'))
+        self.respond(dothis.get_work(self.args['url']))
 
     def handle_setup(self):
-        self.send_response(200)
-        self.end_headers()
         settings['gu'] = self.args['gu']
         settings['gp'] = self.args['gp']
         html = '<script>document.location="/?q=ikke";</script>'
-        self.wfile.write(bytes(html, 'utf8'))
+        self.respond(html)
         poller.poll()
 
     def track(self):
@@ -179,17 +177,18 @@ class Server(server.BaseHTTPRequestHandler):
             self.args.get('favicon', ''),
             self.args.get('selection', '')
         )
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(bytes('OK', 'utf8'))
+        self.respond('OK')
 
     def get_file(self):
         try:
-            payload = bytes(self.load_resource(self.path[1:]), 'utf8')
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(payload)
-        except:
+            payload = self.load_resource(self.path[1:])
+            try:
+                payload = bytes(payload, 'utf8')
+            except:
+                pass
+            self.respond(payload)
+        except Exception as e:
+            print('Fail on', self.path, e)
             self.send_response(404)
 
     def load_resource(self, filename, format='r'):
@@ -199,7 +198,7 @@ class Server(server.BaseHTTPRequestHandler):
             return fp.read()
 
 
-class ThreadedHTTPServer(socketserver.ThreadingMixIn, server.HTTPServer):
+class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     """Handle requests in a separate thread."""
 
 

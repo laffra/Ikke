@@ -1,6 +1,13 @@
 from importers import browser
-import urllib.request
-import urllib.error
+
+import sys
+if sys.version_info >= (3,):
+    from urllib.request import urlopen
+    from urllib.error import HTTPError
+else:
+    from urllib import urlopen
+    from urllib2 import HTTPError
+
 import json
 import stopwords
 import storage
@@ -21,14 +28,14 @@ def search(query, start):
         return []
     items = []
     try:
-        response = urllib.request.urlopen(SEARCH_URL % (
+        response = urlopen(SEARCH_URL % (
             start,
             API_KEY,
             SEARCH_FIELDS,
             CUSTOM_SEARCH_ENGINE_CX,
-            urllib.request.quote(query)
+            quote(query)
         )).read()
-    except urllib.error.HTTPError as e:
+    except HTTPError as e:
         print('GOOGLE: No results, throttling?', e)
     else:
         try:

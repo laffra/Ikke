@@ -1,5 +1,10 @@
 from collections import defaultdict
-from urllib.parse import urlparse
+import sys
+
+if sys.version_info >= (3,):
+    from urllib.parse import urlparse
+else:
+    from urlparse import urlparse
 
 work = defaultdict(str)
 

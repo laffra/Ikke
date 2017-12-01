@@ -11,7 +11,12 @@ import stopwords
 import storage
 import time
 import traceback
-from urllib.parse import urlparse
+
+import sys
+if sys.version_info >= (3,):
+    import urllib.parse as urlparse
+else:
+    from urlparse import urlparse
 
 
 MAXIMUM_DAYS_LOAD = 3650
@@ -220,7 +225,8 @@ class GMail():
         return int(time.mktime(dt.timetuple()))
 
     @classmethod
-    def load(cls, days_count:int=1, force:bool=False):
+    def load(cls, days_count=1, force=False):
+        # type (int,bool) -> None
         if force:
             settings['gl'] = time.time()
         elif not settings.get('gl', 0):

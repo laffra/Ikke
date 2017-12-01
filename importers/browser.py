@@ -5,7 +5,13 @@ import re
 import shutil
 import sqlite3
 from storage import Storage
-from urllib.parse import urlparse
+import sys
+
+if sys.version_info >= (3,):
+    import urllib.parse as urlparse
+else:
+    from urlparse import urlparse
+
 import stopwords
 import storage
 from threadpool import ThreadPool
