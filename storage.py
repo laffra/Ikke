@@ -19,8 +19,10 @@ if sys.version_info >= (3,):
     from urllib.parse import unquote
 else:
     JSONDecodeError = ValueError
-    from urllib import pathname2url as quote
-    from urllib import url2pathname as unquote
+    from urllib import pathname2url
+    def quote(s,safe=''): return pathname2url(s)
+    from urllib import url2pathname
+    def unquote(s): return url2pathname(s)
 
 import uuid
 from collections import defaultdict
@@ -100,7 +102,10 @@ class Storage:
             if os.path.sep in path:
                 local_path = os.path.join(SHORT_DIR, '%s.txt' % uuid.uuid4())
             local_path = '\\\\?\\' + local_path
-        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+        try:
+            os.makedirs(os.path.dirname(local_path))
+        except:
+            pass # ignore if dirs already exist
         return local_path
 
     @classmethod
@@ -142,20 +147,23 @@ class Storage:
         # type: (str,float,str) -> list
         assert isinstance(query, str)
         assert isinstance(timestamp, float), 'unexpected type %s: %s' % (type(timestamp), timestamp)
+        start = time.time()
         key = '%s-%d' % (query, timestamp % 60)
         results = cls.search_cache.get(key)
         if results is None:
             cls.stats['searches'] += 1
-            start = time.time()
             paths = list(cls.run_command(cls.get_search_command(query)))
             cls.stats['raw results'] = len(paths)
-            cls.stats['search-time'] += time.time() - start
+            cls.stats['search time'] += time.time() - start
+            start = time.time()
             results = [result for result in (map(cls.resolve, paths)) if cls.included(result, timestamp)]
             results = cls.search_cache[key] = list(filter(None, results))
+            cls.stats['resolve time'] += time.time() - start
             cls.stats['results'] = len(results)
-        print('STORAGE: ############## STATS')
+        print('STORAGE:', '#'*32, 'STATS', '#'*32)
         for k,v in cls.stats.items():
-            print('STORAGE:   ', k, ':', v)
+            print('STORAGE:', k, ':', v)
+        print('STORAGE:', '#'*73)
         return results
 
     @classmethod
@@ -176,30 +184,26 @@ class Storage:
     @classmethod
     def search_contact(cls, email):
         # type: (str) -> dict
-        path = os.path.join(HOME_DIR, 'contact', 'email', quote(email))
-        for root, dirs, files in os.walk(path):
-            for file in files:
-                with open(os.path.join(root, file), 'r') as f:
-                    from importers import contact
-                    try:
-                        return contact.deserialize(json.loads(f.read()))
-                    except:
-                        pass
+        contact = cls.search_cache.get(email)
+        if not contact:
+            path = os.path.join(HOME_DIR, 'contact', 'email', quote(email))
+            for root, dirs, files in os.walk(path):
+                for file in files:
+                    with open(os.path.join(root, file), 'r') as f:
+                        from importers import contact
+                        try:
+                            contact = contact.deserialize(json.loads(f.read()))
+                            cls.stats['contacts read'] += 1
+                        except:
+                            pass
+            cls.search_cache[email] = contact
+        return contact
 
     @classmethod
     def search_file(cls, filename):
         # type: (str) -> list
         return cls.search(filename, operator='-name')
 
-    @classmethod
-    def set_comment(cls, path, comment):
-        # type: (str,str) -> None
-        if comment:
-            os.popen(SET_COMMENT_SCRIPT % (path, comment.replace('"', ' ')))
-
-    @classmethod
-    def get_comment(cls, path):
-        return os.popen(GET_COMMENT_SCRIPT % path).read()
 
     @classmethod
     def resolve(cls, path):
@@ -212,6 +216,7 @@ class Storage:
                     obj = None
                     try:
                         text = f.read()
+                        Storage.stats['items read'] += 1
                         obj = json.loads(text)
                     except UnicodeDecodeError as e:
                         Storage.stats['failed'] += 1
@@ -237,7 +242,6 @@ class Storage:
                             index += count + 1
                         keys.append(key)
                         values.append(value)
-                        print('   ', index, key, value)
                         index += 2
                     if values:
                         values[-1] = values[-1][:-4]
@@ -281,8 +285,12 @@ class Storage:
         print('SERVER: run', command)
         process = subprocess.Popen(command, stdout=subprocess.PIPE)
         stdout, stderr = process.communicate()
-        for line in stdout.split('\n'):
-            yield line.strip()
+        try:
+            for line in stdout.split('\n'):
+                yield line.strip()
+        except:
+            for line in stdout.split(b'\n'):
+                yield str(line.strip(), 'utf8')
 
     @classmethod
     def setup(cls):

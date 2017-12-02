@@ -1,8 +1,9 @@
 const NORMAL_ICON_SIZE = 32;
 
-var spinner_needed = true;
+var search_finished = {};
 
 var RENDER_AS_GRID = localStorage.rendertype == 'grid';
+var TOP_HEIGHT = 250;
 
 function init_tabs() {
     $('#tabs')
@@ -94,11 +95,6 @@ function render() {
         rerender('all');
         document.location.reload();
     });
-    setTimeout(function() {
-        if (spinner_needed) {
-            $(".spinner").css("display", "block");
-        }
-    }, 500);
 
     window.onpopstate = function(e){
         if (e.state) {
@@ -109,6 +105,12 @@ function render() {
 
     $.get("search?" + get_args(query, ''), function() {
         kinds.forEach(function(kind) {
+            setTimeout(function() {
+                if (!search_finished[kind]) {
+                    console.log('enable spinner for ' + kind);
+                    $(".spinner").css("display", "block");
+                }
+            }, 500);
             if (RENDER_AS_GRID) {
                 load_grid(kind, w, h);
             } else {
@@ -162,8 +164,9 @@ function load_grid(kind, w, h) {
 }
 
 function clear_spinner(kind, error, graph) {
-    spinner_needed = false;
+    search_finished[kind] = true;
     $(".spinner").css("display", "none");
+    console.log('clear spinnner ' + kind)
     if (error) {
         $('#stats-' + kind).text('An internal error occurred. Details: ' + error);
         $("#sad-" + kind).css("display", "block");
@@ -259,7 +262,7 @@ function load_graph(kind, w, h) {
             .alphaDecay(0.05);
 
     var w = $(window).width();
-    var h = $(window).height();
+    var h = $(window).height() - TOP_HEIGHT;
     var zoom = d3.zoom().scaleExtent([0.3, 2]).on("zoom", zoomed);
     var svg = d3.select("#tabs-" + kind)
         .append("svg")
@@ -291,7 +294,7 @@ function load_graph(kind, w, h) {
         update_summary(kind, graph);
 
         zoom.scaleTo(svg, current_zoom_scale = Math.min(.8, 40/graph.nodes.length));
-        console.log('zoom to ' + current_zoom_scale);
+        force.alphaDecay(Math.max(0.05, graph.nodes.length/1000));
 
         svg.insert("rect", ":first-child")
             .attr("id", "background-" + kind)
@@ -507,7 +510,7 @@ function load_graph(kind, w, h) {
 
         function resize() {
             var width = $(window).width();
-            var height = $(window).height();
+            var height = $(window).height() - TOP_HEIGHT;
             if (width != w || height != h) {
                 document.location.reload();
             }
