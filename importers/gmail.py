@@ -174,7 +174,10 @@ class GMail():
 
     def parse_message(self, response):
         uid, data = response
-        msg = email.message_from_bytes(data)
+        try:
+            msg = email.message_from_bytes(data)
+        except:
+            msg = email.message_from_string(data)
         msg['uid'] = uid.decode()
         subject = str(email.header.make_header(email.header.decode_header(msg['Subject'])))
         timestamp = self.get_timestamp(msg.get('Received', msg.get('Date')).split(';')[-1].strip())
