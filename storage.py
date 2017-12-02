@@ -120,7 +120,7 @@ class Storage:
             with open(path, format) as fout:
                 fout.write(body)
             os.utime(path, (data['timestamp'], data['timestamp']))
-            print('STORAGE: Add', path)
+            print('STORAGE: Add %s' % path)
         except IOError as e:
             print(e)
             raise
@@ -160,10 +160,10 @@ class Storage:
             results = cls.search_cache[key] = list(filter(None, results))
             cls.stats['resolve time'] += time.time() - start
             cls.stats['results'] = len(results)
-        print('STORAGE:', '#'*32, 'STATS', '#'*32)
+        print('STORAGE: %s STATS %s' % ('#'*32, '#'*32))
         for k,v in cls.stats.items():
-            print('STORAGE:', k, ':', v)
-        print('STORAGE:', '#'*73)
+            print('STORAGE: %s: %s' % (k, v))
+        print('STORAGE: %s' % ('#'*71))
         return results
 
     @classmethod
@@ -174,7 +174,7 @@ class Storage:
             if isinstance(value, list):
                 quoted = [quote(v, safe='') for v in value]
                 return '[%s%s%s%s' % (os.path.sep, len(quoted), os.path.sep, os.path.sep.join(quoted))
-            return quote(str(value), '')[:250]
+            return quote(('%s' % value).encode('utf8'), '')[:250]
         kv = [(k,serialize(v)) for k,v in data.items() if k in handler.PATH_ATTRIBUTES and v]
         kv = sorted(kv, key=lambda kv: kv[0])
         segments = os.path.sep.join(itertools.chain(*kv)).split(os.path.sep)
@@ -207,7 +207,7 @@ class Storage:
 
     @classmethod
     def resolve(cls, path):
-        # type: (str) -> dict
+        # type: (str) -> (dict,None)
         item = cls.file_cache.get(path)
         if not item:
             if path.startswith(SHORT_DIR):
@@ -220,10 +220,10 @@ class Storage:
                         obj = json.loads(text)
                     except UnicodeDecodeError as e:
                         Storage.stats['failed'] += 1
-                        print('STORAGE: Cannot convert binary content to json',e, path)
+                        print('STORAGE: json error %s: %s' % (e, path))
                     except JSONDecodeError as e:
                         Storage.stats['failed'] += 1
-                        print('STORAGE: Cannot convert to json',e, path)
+                        print('STORAGE: json error %s: %s' % (e, path))
             else:
                 kv = cls.split_path(path)
                 kind, kv = kv[0], kv[1:]
@@ -282,7 +282,7 @@ class Storage:
     @classmethod
     def run_command(cls, command):
         # type: (list) -> str
-        print('SERVER: run', command)
+        print('SERVER: run %s' % command)
         process = subprocess.Popen(command, stdout=subprocess.PIPE)
         stdout, stderr = process.communicate()
         try:
@@ -368,7 +368,7 @@ def delete_all(kind):
     # type (str) -> None
     path = Storage.get_local_path(kind)
     for n in range(10):
-        print('Deleting all of', path, 'in', 10-n, 'seconds')
+        print('Deleting all of %s in %d seconds' % (path, 10-n))
         time.sleep(1)
     shutil.rmtree(path)
 
@@ -379,21 +379,21 @@ if __name__ == '__main__':
         path = "/Users/laffra/IKKE/gmail/content_type/text-html/kind/gmail/label/activity aler ... n alert limit/message_id/<22f44d4d-ad5a-40f6-83dc-336b2b94294c@xtnvs5mta401.xt.local>/receivers/[/1/laffra@gmail.com/senders/[/1/onlinebanking@ealerts.bankofamerica.com/subject/Activity Alert: Electronic or Online Withdrawal Over Your Chosen Alert Limit/thread/activity aler ... n alert limit - ['laffra@gmail.com', 'onlinebanking@ealerts.bankofamerica.com']/timestamp/1510537596/uid/16455 (UID 92562 RFC822 {25744}.txt"
         for k,v in Storage.resolve(path).items():
             if v:
-                print(k,'=',v)
+                print('%s=%s' % (k,v))
         print()
 
     if False:
         for n,p in enumerate(Storage.search('reza', timestamp=0.0)):
             print(n)
             for k,v in p.items():
-                print('  ', k, repr(v))
+                print('  %s: %s' % (k, repr(v)))
         print(Storage.stats)
         print()
 
     if False:
         for k,v in Storage.search_contact('laffra@gmail.com').items():
             if v:
-                print(k,'=',v)
+                print('%s=%s' % (k,v))
         print(Storage.stats)
         print()
 

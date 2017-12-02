@@ -58,7 +58,7 @@ class Server(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         message = format % args
         if not 'search_poll' in message:
-            print('SERVER:', message)
+            print('SERVER: %s' % message)
 
     def parse_args(self):
         try:
@@ -88,7 +88,7 @@ class Server(BaseHTTPRequestHandler):
         try:
             self.wfile.write(message)
         except Exception as e:
-            print('SERVER: Client went away', e)
+            print('SERVER: Client went away: %s' % e)
 
     def get_index(self):
         if not 'gu' in settings:
@@ -107,7 +107,7 @@ class Server(BaseHTTPRequestHandler):
         query = self.args.get('q', '')
         settings['query'] = query
         duration = self.args.get('duration', 'year')
-        print('SERVER: search', duration, query)
+        print('SERVER: search %s %s' % (duration, query))
         self.graphs[query] = graph.Graph(query, duration)
         self.respond('OK')
 
@@ -121,7 +121,6 @@ class Server(BaseHTTPRequestHandler):
     def get_resource(self):
         path = self.args['path']
         query = self.args.get('query', '')
-        # print('SERVER: get', repr(query), repr(path))
         obj = Storage.resolve(path.replace(' ', '%20'))
         if obj:
             handler = import_module('importers.%s' % obj['kind'])
@@ -145,13 +144,11 @@ class Server(BaseHTTPRequestHandler):
 
     def load(self):
         items = Storage.search_file('"%s"' % self.args['uid'])
-        print('Found', len(items), 'items for', self.args['uid'])
         for n, item in enumerate(items):
             if 'path' in item and os.path.exists(item['path']):
                 path = os.path.realpath(item['path'])
                 url = 'file://%s' % path
                 webbrowser.open(url)
-                print('webbrowser opened', n, url)
         html = '<html><script></script></html>'
         self.respond(html)
 
@@ -187,7 +184,7 @@ class Server(BaseHTTPRequestHandler):
                 pass
             self.respond(payload)
         except Exception as e:
-            print('Fail on', self.path, e)
+            print('Fail on %s: %s' % (self.path, e))
             self.send_response(404)
 
     def load_resource(self, filename, format='r'):
@@ -205,7 +202,6 @@ if __name__ == '__main__':
     poller.start()
     threaded_server = ThreadedHTTPServer(SERVER_ADDRESS, Server)
     webbrowser.open(MAIN_URL, autoraise=False)
-    print('SERVER: running on', MAIN_URL)
     try:
         threaded_server.serve_forever()
     except KeyboardInterrupt:
