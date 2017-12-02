@@ -1,7 +1,7 @@
 from importers import contact
-from importers import browser
 import datetime
 import email
+import email.header
 import email.utils
 import htmlparser
 import imaplib
@@ -22,6 +22,8 @@ else:
 MAXIMUM_DAYS_LOAD = 3650
 
 URL_MATCH_RE = re.compile('href=[\'"]((https?):((//)|(\\\\))+([\w\d:#@%/;$()~_?\+-=\\\.&](#!)?)*)')
+
+DATESTRING_RE = re.compile(' [-+].*')
 
 PATH_ATTRIBUTES = {
     'kind',
@@ -167,9 +169,9 @@ class GMail():
 
     def get_addresses(self, persons_string, timestamp):
         return [
-            contact.find_contact(email.lower(), name, timestamp=timestamp)['email']
-            for name, email in email.utils.getaddresses(persons_string)
-            if email
+            contact.find_contact(email_address.lower(), name, timestamp=timestamp)['email']
+            for name, email_address in email.utils.getaddresses(persons_string)
+            if email_address
         ]
 
     def parse_message(self, response):
@@ -218,13 +220,8 @@ class GMail():
 
     @classmethod
     def get_timestamp(cls, datestring):
-        try:
-            dt = datetime.datetime.strptime(datestring[:-6], '%a, %d %b %Y %H:%M:%S %z')
-        except:
-            try:
-                dt = datetime.datetime.strptime(datestring[:-6], '%a, %d %b %Y %H:%M:%S +0000')
-            except:
-                dt = datetime.datetime.strptime(datestring[:-6], '%a, %d %b %Y %H:%M:%S')
+        datestring = re.sub(DATESTRING_RE, '', datestring)
+        dt = datetime.datetime.strptime(datestring, '%a, %d %b %Y %H:%M:%S')
         return int(time.mktime(dt.timetuple()))
 
     @classmethod
@@ -309,6 +306,6 @@ def cleanup():
 if __name__ == '__main__':
     # settings.clear()
     # load(1, True)
-    load(3650, True)
+    load(1, True)
     # load('Error', True)
     # poll()
