@@ -71,11 +71,10 @@ class Server(BaseHTTPRequestHandler):
             self.args = {}
 
     def install(self):
-        self.send_response(200)
-        self.end_headers()
         html = self.jinja2_env.get_template('setup.html').render({
             'location': os.path.dirname(os.path.realpath(__file__)),
         })
+        self.respond(html)
 
     def respond(self, html, content_type=None):
         self.send_response(200)
