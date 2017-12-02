@@ -18,6 +18,7 @@ Ikke consists of various components:
  * Smooth graph visualizations that show relationships between various data sources.
  
  Getting started with developing Ikke:
+ * If your machine does not have Python yet, download [either Python 2 or 3](https://www.python.org/downloads)
  * Install [PyCharm Community Edition](https://www.jetbrains.com/pycharm/download)
  * [Setup Git support](https://www.jetbrains.com/help/pycharm/using-git-integration.html)
  * In PyCharm, do "VCS > Checkout from version Control > Github" and check out github.com/laffra/ikke
