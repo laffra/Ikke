@@ -107,14 +107,16 @@ function render() {
         kinds.forEach(function(kind) {
             setTimeout(function() {
                 if (!search_finished[kind]) {
-                    console.log('enable spinner for ' + kind);
-                    $(".spinner").css("display", "block");
+                    $(".spinner")
+                        .css("margin-left", w/3)
+                        .css("margin-top", h/4)
+                        .css("display", "block");
                 }
             }, 500);
             if (RENDER_AS_GRID) {
-                load_grid(kind, w, h);
+                load_grid(kind, w, h - TOP_HEIGHT);
             } else {
-                load_graph(kind, w, h);
+                load_graph(kind, w, h - TOP_HEIGHT);
             }
         });
     })

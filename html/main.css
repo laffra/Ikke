@@ -367,8 +367,6 @@ table.ui-table tr:hover {
 
 .spinner {
     display: block;
-    margin: 100px;
-    padding-left: 200px;
 }
 
 .spinner img {
