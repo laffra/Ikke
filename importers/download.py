@@ -17,7 +17,7 @@ ONE_WEEK_SECONDS = 7 * 24 * 60 * 60
 class Download:
     @classmethod
     def load(cls):
-        last_check = settings.get('download/lastcheck', 0)
+        last_check = settings.get('download/xlastcheck', 0)
         now = time.time()
 
         for path, dirs, files in os.walk(DOWNLOADS_DIR):
@@ -27,7 +27,7 @@ class Download:
                 timestamp = os.path.getmtime(file_path)
                 if timestamp > last_check:
                     if extension.lower() in SKIP_CONTENT:
-                        print('DOWNLOAD: skip', filename)
+                        print('DOWNLOAD: skip %s' % filename)
                         continue
                     with open(file_path, 'rb') as fin:
                         storage.Storage.add_binary_data(fin.read(), {
@@ -35,7 +35,7 @@ class Download:
                             'kind': 'file',
                             'timestamp': timestamp,
                         })
-                    print('DOWNLOAD: add', filename)
+                    print('DOWNLOAD: add %s' % filename)
                 if now - timestamp > ONE_WEEK_SECONDS:
                     pass
                     # print('DOWNLOAD: discard', filename)

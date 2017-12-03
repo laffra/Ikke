@@ -18,14 +18,14 @@ import classify
 from threadpool import ThreadPool
 from storage import Storage
 
-timestamps = {
-    'day': 86400,
-    'week': 604800,
-    'month': 2678400,
-    'month3': 3 * 2678400,
-    'month6': 6 * 2678400,
-    'year': 31536000,
-    'forever': 3153600000,
+days = {
+    'day': 1,
+    'week': 7,
+    'month': 31,
+    'month3': 92,
+    'month6': 182,
+    'year': 365,
+    'forever': 3650,
 }
 MY_EMAIL_ADDRESS = 'laffra@gmail.com'
 LINE_COLORS = [ '#f4c950', '#ee4e5a', '#489ac9', '#41ba7d', '#fb7c54',] * 2
@@ -41,13 +41,12 @@ class Graph:
         self.query = query
         self.search_results = defaultdict(list)
         self.search_duration = defaultdict(list)
-        after_timestamp = time.time() - timestamps[duration_string]
         #self.google_pool = ThreadPool([
             # (self.search_google, (1,)),
             # (self.search_google, (11,)),
         #])
         self.my_pool = ThreadPool(1, [
-            (self.search_me, after_timestamp),
+            (self.search_me, days[duration_string])
         ])
 
     def add_result(self, kind, items, duration):

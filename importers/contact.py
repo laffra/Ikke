@@ -38,7 +38,6 @@ def find_contact(email, name='', phones=None, timestamp=None):
     name = remove_quotes(name)
     email = remove_quotes(email)
     contact = contacts_cache.get(email)
-    print('find_contact', email)
     if not contact:
         contact = Contact({
             'kind': 'contact',
@@ -98,7 +97,7 @@ def poll():
 
 def cleanup():
     if save_queue:
-        print('CONTACT: cleanup, save ', len(save_queue), 'contacts.')
+        print('CONTACT: cleanup, save %d contacts' % len(save_queue))
     for n, contact in enumerate(save_queue.copy()):
         contact.save()
     save_queue.clear()
@@ -110,7 +109,7 @@ def test():
         for k,v in contacts_cache.items():
             print('   cached:', k, v.names)
         contact = find_contact(email, name)
-        print('   Contact names are', contact.name, contact.names)
+        print('   Contact names are %s %s' % (contact.name, contact.names))
         if check_name:
             assert expected_name in contact.names, 'Name %s not in %s' % (expected_name, contact.names)
             print('   Found the right name')
