@@ -6,6 +6,7 @@ import shutil
 import sqlite3
 from storage import Storage
 import sys
+import utils
 
 if sys.version_info >= (3,):
     import urllib.parse as urlparse
@@ -59,16 +60,15 @@ def is_meta_site(url):
 
 
 def adjust_chrome_timestamp(chrome_timestamp):
-    try:
-        delta = datetime.timedelta(microseconds=int(chrome_timestamp))
-        return int((chrome_epoch + delta).timestamp())
-    except:
-        return int(datetime.datetime.now().time())
+    delta = datetime.timedelta(microseconds=int(chrome_timestamp))
+    return utils.get_timestamp(chrome_epoch + delta)
 
 
 def process_url(rows):
-    for row in rows:
+    for n,row in enumerate(rows):
         visit_count, last_visit_time, title, url = row
+        if n % 1000 == 0:
+            print('BROWSER: Add %s %s' % (title, url))
         if title:
             track(url, title, '', get_favicon(url), '', adjust_chrome_timestamp(last_visit_time), force=True)
 
@@ -86,8 +86,7 @@ def track(url, title, image, favicon, selection, timestamp=0, force=False):
     if not force and not image and not selection:
         return
 
-    # print('BROWSER: Track %s' % url)
-    timestamp = timestamp or datetime.datetime.now().time()
+    # print('BROWSER: Track %s %s' % (timestamp, url))
     Storage.add_data({
         'kind': 'browser',
         'uid': url,
@@ -98,7 +97,7 @@ def track(url, title, image, favicon, selection, timestamp=0, force=False):
         'favicon': favicon,
         'selection': selection,
         'title': title,
-        'timestamp': timestamp or datetime.datetime.now().time()
+        'timestamp': timestamp or utils.get_timestamp()
     })
 
 

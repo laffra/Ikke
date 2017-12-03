@@ -11,6 +11,7 @@ import stat
 import stopwords
 import subprocess
 import time
+from utils import get_timestamp
 
 import sys
 if sys.version_info >= (3,):
@@ -115,6 +116,7 @@ class Storage:
         assert 'kind' in data, "Kind needed"
         assert 'uid' in data, "UID needed"
         assert 'timestamp' in data, "Timestamp needed"
+        assert type(data['timestamp']) == float, "Float timestamp needed"
         cls.stats['writes'] += 1
         path = cls.get_local_path(filename)
         try:
@@ -173,6 +175,10 @@ class Storage:
             if isinstance(value, list):
                 quoted = [quote(v.encode('utf8'), safe='') for v in value]
                 return '[%s%s%s%s' % (os.path.sep, len(quoted), os.path.sep, os.path.sep.join(quoted))
+            if isinstance(value, float):
+                return '%f' % value
+            if isinstance(value, int):
+                return '%d' % value
             return quote(('%s' % value).encode('utf8'), '')[:250]
         kv = [(k,serialize(v)) for k,v in data.items() if k in handler.PATH_ATTRIBUTES and v]
         kv = sorted(kv, key=lambda kv: kv[0])
@@ -251,7 +257,8 @@ class Storage:
                     obj['kind'] = kind
                     obj['label'] = obj.get('label', obj['uid'])
                     obj['words'] = obj['label'].split(' ')
-                    obj['timestamp'] = float(obj.get('timestamp', time.time()))
+                    t = obj.get('timestamp', get_timestamp())
+                    obj['timestamp'] = float(obj.get('timestamp', get_timestamp()))
             if obj:
                 item = cls.to_item(obj, path)
                 cls.file_cache[path] = item
@@ -269,7 +276,7 @@ class Storage:
         handler = import_module('importers.%s' % obj['kind'])
         item = handler.deserialize(obj)
         item.path = item['path'] = path
-        dt = datetime.datetime.fromtimestamp(item.timestamp)
+        dt = datetime.datetime.fromtimestamp(float(item.timestamp))
         item.date = '%s/%s/%s %s:%s' % (dt.year, dt.month, dt.day, dt.hour, dt.minute)
         return item
 
