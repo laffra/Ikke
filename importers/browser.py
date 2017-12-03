@@ -63,7 +63,7 @@ def adjust_chrome_timestamp(chrome_timestamp):
         delta = datetime.timedelta(microseconds=int(chrome_timestamp))
         return int((chrome_epoch + delta).timestamp())
     except:
-        return int(time.time())
+        return int(datetime.datetime.now().time())
 
 
 def process_url(rows):
@@ -87,7 +87,7 @@ def track(url, title, image, favicon, selection, timestamp=0, force=False):
         return
 
     # print('BROWSER: Track %s' % url)
-    timestamp = timestamp or datetime.datetime.now().timestamp()
+    timestamp = timestamp or datetime.datetime.now().time()
     Storage.add_data({
         'kind': 'browser',
         'uid': url,
@@ -98,7 +98,7 @@ def track(url, title, image, favicon, selection, timestamp=0, force=False):
         'favicon': favicon,
         'selection': selection,
         'title': title,
-        'timestamp': timestamp or time.time(),
+        'timestamp': timestamp or datetime.datetime.now().time()
     })
 
 
@@ -123,7 +123,7 @@ def load(cursor, query, processor):
         start, end = n*chunk_size, (n+1)*chunk_size
         pool.add_task(processor, rows[start: end])
     pool.wait_completion()
-    print('BROWSER:', len(rows), 'urls added,', thread_count, 'threads,', chunk_size, 'chunksize')
+    print('BROWSER: %d urls added with %d threads with chunksize %d.' % (len(rows), thread_count, chunk_size))
 
 
 class BrowserItem(storage.Data):
