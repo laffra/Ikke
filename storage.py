@@ -20,7 +20,8 @@ if sys.version_info >= (3,):
 else:
     JSONDecodeError = ValueError
     from urllib import pathname2url
-    def quote(s,safe=''): return pathname2url(s)
+    def quote(s,safe=''):
+        return pathname2url(s).replace('/', '%2F')
     from urllib import url2pathname
     def unquote(s): return url2pathname(s)
 
@@ -120,51 +121,49 @@ class Storage:
             with open(path, format) as fout:
                 fout.write(body)
             os.utime(path, (data['timestamp'], data['timestamp']))
-            print('STORAGE: Add %s' % path)
+            obj = cls.resolve(path)
+            assert obj
         except IOError as e:
             print(e)
             raise
 
     @classmethod
-    def included(cls, obj, timestamp):
-        # type: (dict,float) -> bool
-        return obj and timestamp < obj['timestamp']
-
-    @classmethod
-    def get_search_command(cls, query):
+    def get_search_command(cls, query, days):
+        # type (str,int) -> list
         if os.name == 'nt':
-            localdir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'localsearch')
-            return ['cscript', '/nologo', os.path.join(localdir, 'search.vbs'), HOME_DIR, query]
+            local_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'localsearch')
+            since = 'System.DateCreated > \'%s\'' % cls.get_year_month_day(days)
+            return ['cscript', '/nologo', os.path.join(local_dir, 'search.vbs'), HOME_DIR, '%s AND %s' % (query, since)]
         elif os.name == 'posix':
             operator = '-interpret'
-            operands = (query + ' ') if operator == '-interpret' else query
-            return ['mdfind', '-onlyin', HOME_DIR, operator, operands]
+            since = 'modified:%s-%s' % (cls.get_day_month_year(days), cls.get_day_month_year(0))
+            return ['mdfind', '-onlyin', HOME_DIR, operator, query, since]
         else:
             raise ValueError('Unsupported OS:', os.name)
 
     @classmethod
-    def search(cls, query, timestamp, operator='-interpret'):
-        # type: (str,float,str) -> list
+    def search(cls, query, days, operator='-interpret'):
+        # type: (str,int,str) -> list
         assert isinstance(query, str)
-        assert isinstance(timestamp, float), 'unexpected type %s: %s' % (type(timestamp), timestamp)
-        start = time.time()
-        key = '%s-%d' % (query, timestamp % 60)
-        results = cls.search_cache.get(key)
-        if results is None:
-            cls.stats['searches'] += 1
-            paths = list(cls.run_command(cls.get_search_command(query)))
-            cls.stats['raw results'] = len(paths)
-            cls.stats['search time'] += time.time() - start
-            start = time.time()
-            results = [result for result in (map(cls.resolve, paths)) if cls.included(result, timestamp)]
-            results = cls.search_cache[key] = list(filter(None, results))
-            cls.stats['resolve time'] += time.time() - start
-            cls.stats['results'] = len(results)
+        assert isinstance(days, int), 'unexpected type %s: %s' % (type(days), days)
+        search_start = time.time()
+        paths = list(cls.run_command(cls.get_search_command(query, days)))
+        resolve_start = time.time()
+        results = list(filter(None, map(cls.resolve, paths)))
+        cls.log_search_stats(len(paths), time.time() - search_start, len(results), time.time() - resolve_start)
+        return results
+
+    @classmethod
+    def log_search_stats(cls, search_count, search_duration, resolve_count, resolve_duration):
+        cls.stats['searches'] += 1
+        cls.stats['raw results'] = search_count
+        cls.stats['search time'] += search_duration
+        cls.stats['results'] = resolve_count
+        cls.stats['resolve time'] += resolve_duration
         print('STORAGE: %s STATS %s' % ('#'*32, '#'*32))
         for k,v in cls.stats.items():
             print('STORAGE: %s: %s' % (k, v))
         print('STORAGE: %s' % ('#'*71))
-        return results
 
     @classmethod
     def get_filename(cls, data, extension='.txt'):
@@ -172,7 +171,7 @@ class Storage:
         handler = import_module('importers.%s' % data['kind'])
         def serialize(value):
             if isinstance(value, list):
-                quoted = [quote(v, safe='') for v in value]
+                quoted = [quote(v.encode('utf8'), safe='') for v in value]
                 return '[%s%s%s%s' % (os.path.sep, len(quoted), os.path.sep, os.path.sep.join(quoted))
             return quote(('%s' % value).encode('utf8'), '')[:250]
         kv = [(k,serialize(v)) for k,v in data.items() if k in handler.PATH_ATTRIBUTES and v]
@@ -247,6 +246,7 @@ class Storage:
                         values[-1] = values[-1][:-4]
                     obj = dict(zip(keys, [v for v in values]))
                     if not 'uid' in obj:
+                        print('no uid in %s %s %s' % (obj.get('path'), obj.get('message_id'), obj.keys()))
                         return None
                     obj['kind'] = kind
                     obj['label'] = obj.get('label', obj['uid'])
@@ -274,15 +274,21 @@ class Storage:
         return item
 
     @classmethod
-    def get_year_month_day(cls, timestamp):
-        # type: (float) -> tuple
-        dt = datetime.datetime.fromtimestamp(timestamp)
-        return '%s' % dt.year, '%02d' % dt.month, '%02d' % dt.day
+    def get_day_month_year(cls, days):
+        # type: (int) -> str
+        dt = datetime.datetime.now() - datetime.timedelta(days=days)
+        return '%s/%s/%s' % (dt.day, dt.month, dt.year)
+
+    @classmethod
+    def get_year_month_day(cls, days):
+        # type: (int) -> str
+        dt = datetime.datetime.now() - datetime.timedelta(days=days)
+        return '%4d-%02d-%02d' % (dt.year, dt.month, dt.day)
 
     @classmethod
     def run_command(cls, command):
         # type: (list) -> str
-        print('SERVER: run %s' % command)
+        print('SERVER: run %s' % ' '.join(command))
         process = subprocess.Popen(command, stdout=subprocess.PIPE)
         stdout, stderr = process.communicate()
         try:
@@ -382,21 +388,18 @@ if __name__ == '__main__':
                 print('%s=%s' % (k,v))
         print()
 
-    if False:
-        for n,p in enumerate(Storage.search('reza', timestamp=0.0)):
-            print(n)
-            for k,v in p.items():
-                print('  %s: %s' % (k, repr(v)))
-        print(Storage.stats)
+    if True:
+        results = sorted((os.path.getmtime(result.path),result.path) for result in Storage.search('laffra', days=5))
+        now = datetime.datetime.now()
+        for timestamp,path in results[:5]:
+            print('%s  %s' % (now - datetime.datetime.fromtimestamp(timestamp), path))
         print()
 
     if False:
         for k,v in Storage.search_contact('laffra@gmail.com').items():
             if v:
                 print('%s=%s' % (k,v))
-        print(Storage.stats)
         print()
 
-    if True:
-        delete_all('file')
+
 
