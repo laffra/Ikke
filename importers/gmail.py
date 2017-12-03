@@ -306,7 +306,6 @@ def cleanup():
 if __name__ == '__main__':
     # settings.clear()
     # load(1, True)
-    load(3650
-         , True)
+    load(3650, True)
     # load('Error', True)
     # poll()
