@@ -22,7 +22,7 @@ else:
     JSONDecodeError = ValueError
     from urllib import pathname2url
     def quote(s,safe=''):
-        return pathname2url(s).replace('/', '%2F')
+        return s.replace('/', '%2F')
     from urllib import url2pathname
     def unquote(s): return url2pathname(s)
 
@@ -116,7 +116,7 @@ class Storage:
         assert 'kind' in data, "Kind needed"
         assert 'uid' in data, "UID needed"
         assert 'timestamp' in data, "Timestamp needed"
-        assert type(data['timestamp']) == float, "Float timestamp needed"
+        assert type(data['timestamp']) in (int,float), "Number timestamp needed, not %s" % type(data['timestamp'])
         cls.stats['writes'] += 1
         path = cls.get_local_path(filename)
         try:
@@ -124,7 +124,6 @@ class Storage:
                 fout.write(body)
             os.utime(path, (data['timestamp'], data['timestamp']))
             obj = cls.resolve(path)
-            assert obj
         except IOError as e:
             print(e)
             raise
@@ -134,8 +133,8 @@ class Storage:
         # type (str,int) -> list
         if os.name == 'nt':
             local_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'localsearch')
-            since = 'System.DateCreated > \'%s\'' % cls.get_year_month_day(days)
-            return ['cscript', '/nologo', os.path.join(local_dir, 'search.vbs'), HOME_DIR, '%s AND %s' % (query, since)]
+            since = cls.get_year_month_day(days)
+            return ['cscript', '/nologo', os.path.join(local_dir, 'search.vbs'), HOME_DIR, query, since]
         elif os.name == 'posix':
             operator = '-interpret'
             since = 'modified:%s-%s' % (cls.get_day_month_year(days), cls.get_day_month_year(0))
@@ -252,7 +251,6 @@ class Storage:
                         values[-1] = values[-1][:-4]
                     obj = dict(zip(keys, [v for v in values]))
                     if not 'uid' in obj:
-                        print('no uid in %s %s %s' % (obj.get('path'), obj.get('message_id'), obj.keys()))
                         return None
                     obj['kind'] = kind
                     obj['label'] = obj.get('label', obj['uid'])

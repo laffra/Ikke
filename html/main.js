@@ -269,8 +269,6 @@ function load_graph(kind, w, h) {
     var svg = d3.select("#tabs-" + kind)
         .append("svg")
         .style("cursor", "move")
-        .attr("width", w - 2 * $('.logo').width() - 96)
-        .attr("height", h)
         .call(zoom);
     var g = svg.append("g");
     var current_zoom_scale = 0.8;
@@ -291,6 +289,8 @@ function load_graph(kind, w, h) {
     });
 
     d3.json("graph?" + get_args(query, kind), function(error, graph) {
+        svg.attr("width", w - 2 * $('.logo').width() - 96)
+           .attr("height", h);
         clear_spinner(kind, error, graph);
 
         update_summary(kind, graph);
