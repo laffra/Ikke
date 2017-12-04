@@ -8,7 +8,7 @@ end if
 SqlQuery = "SELECT Top 100000 System.ItemPathDisplay " & _
     "FROM SYSTEMINDEX WHERE FREETEXT('" & WScript.Arguments.Item(1) & "') AND " & _
     "SCOPE = '" & WScript.Arguments.Item(0) & "' AND " & _
-    "System.DateCreated > '" & Wscript.Arguments.Item(2) & "'"
+    "System.DateModified >= '" & Wscript.Arguments.Item(2) & "'"
 
 Set objConnection = CreateObject("ADODB.Connection")
 Set objRecordSet = CreateObject("ADODB.Recordset")
