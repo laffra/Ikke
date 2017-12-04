@@ -363,7 +363,7 @@ class File(Data):
         self.words = stopwords.remove_stopwords(filename.replace('+', ' '))
         self.filename = filename
         self.uid = filename
-        self.label = filename
+        self.label = filename.replace('%20', ' ')
         self.timestamp = os.path.getmtime(path)
         extension = os.path.splitext(path)[1][1:]
         self.icon_size = 32
