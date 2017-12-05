@@ -16,7 +16,6 @@ else:
 import stopwords
 import storage
 from threadpool import ThreadPool
-import time
 
 HISTORY_QUERY_URLS = 'select visit_count, last_visit_time, title, url from urls'
 PATH_ATTRIBUTES = {
@@ -45,6 +44,8 @@ META_DOMAINS = {
     '//localhost:',
 }
 META_DOMAINS_RE = re.compile('|'.join(META_DOMAINS))
+CLEANUP_URL_PATH_RE = re.compile('\W+')
+MAX_FILENAME_LENGTH = 75
 
 chrome_epoch = datetime.datetime(1601,1,1)
 
@@ -80,16 +81,21 @@ def get_favicon(url):
 
 def track(url, title, image, favicon, selection, timestamp=0, force=False):
     url = normalize_url(url)
-    domain = urlparse(url).netloc
+    parsed_url = urlparse(url)
+    domain = parsed_url.netloc
+    filename = re.sub(CLEANUP_URL_PATH_RE, '+', parsed_url.path[1:])
+    if len(filename) > MAX_FILENAME_LENGTH:
+        filename = filename[:MAX_FILENAME_LENGTH/2] + '+++' + filename[-MAX_FILENAME_LENGTH/2:]
+    uid = os.path.join(domain, filename)
     if is_meta_site(url):
         return
     if not force and not image and not selection:
         return
 
-    # print('BROWSER: Track %s %s' % (timestamp, url))
+    print('BROWSER: Track %s %s' % (timestamp, url))
     Storage.add_data({
         'kind': 'browser',
-        'uid': url,
+        'uid': uid,
         'url': url,
         'domain': domain,
         'label': title,
@@ -131,15 +137,16 @@ class BrowserItem(storage.Data):
         self.kind = obj.get('kind', 'browser')
         self.color = 'navy'
         self.title = self.label = obj.get('label', '')
-        self.uid = self.url = obj.get('uid', self.title)
+        self.uid = obj.get('uid', self.title)
+        self.url = obj['url']
         self.domain = obj.get('domain', '').replace('www.', '')
         if self.domain:
             self.label = self.domain
         self.image = obj.get('image', '')
         self.selection = obj.get('selection', '')
         self.icon = self.image or obj.get('favicon', '')
-        self.icon_size = 48 if self.image else 24
-        self.font_size = 12 if self.image else 12
+        self.icon_size = 32 if self.image else 24
+        self.font_size = 12
         self.zoomed_icon_size = 256 if self.image else 24
         words = '%s %s %s' % (self.title, self.selection, self.url)
         self.words = list(set(stopwords.remove_stopwords(words.replace('+', ' '))))
