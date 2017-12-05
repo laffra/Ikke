@@ -6,6 +6,7 @@ import email.utils
 import htmlparser
 import imaplib
 from settings import settings
+import os
 import re
 import stopwords
 import storage
@@ -59,7 +60,7 @@ class GMail():
         return connection
 
     def open_connections(self):
-        self.inbox = self.open_connection('INBOX')
+        self.inbox = self.open_connection('"[Gmail]/All Mail"')
         self.sent = self.open_connection('"[Gmail]/Sent Mail"')
 
     def close_connections(self):
@@ -107,7 +108,7 @@ class GMail():
                 storage.Storage.add_binary_data(
                     body,
                     {
-                        'uid': filename,
+                        'uid': os.path.join(msg['Message-ID'], filename),
                         'kind': 'file',
                         'timestamp': timestamp,
                     })
@@ -141,7 +142,7 @@ class GMail():
         if result == "OK" and message_ids[0]:
             return message_ids[0].decode("utf-8").split(' ')
         else:
-            print('GMAIL: Bad query', result, repr(query))
+            print('GMAIL: Bad query %s %s' % (result, repr(query)))
         return []
 
     @classmethod
@@ -155,12 +156,14 @@ class GMail():
     def parse_messages(self, connection, message_ids):
         if not message_ids:
             return
+        print('GMAIL: Parsing %d message ids' % len(message_ids))
         result, responses = connection.uid('fetch', ','.join(message_ids), '(RFC822)')
         if result == 'OK':
             responses = filter(lambda response: len(response) > 1, responses)
             for response in responses:
                 try:
                     self.parse_message(response)
+                    GMail.messages_loaded += 1
                 except Exception as e:
                     print('GMAIL: Cannot handle response due to %s' % e)
                     traceback.print_exc()
@@ -191,7 +194,7 @@ class GMail():
         emails = sorted(list(set(receivers + ccs + senders)))
         thread = '%s - %s' % (label, emails)
         storage.Storage.add_data({
-            'uid': msg['uid'],
+            'uid': msg['uid'] or msg['Message-ID'],
             'message_id': msg['Message-ID'],
             'senders': senders,
             'ccs': ccs,
@@ -207,6 +210,7 @@ class GMail():
         })
         self.save_attachments(msg, subject, timestamp)
         self.save_urls(body, subject, words, timestamp)
+        print('GMAIL: Add message "%s"' % subject)
         # for k,v in msg.items(): print(k, repr(v).replace('\n',' '))
         # print('-'*120)
 
@@ -227,6 +231,7 @@ class GMail():
     @classmethod
     def load(cls, days_count=1, force=False):
         # type (int,bool) -> None
+        cls.messages_loaded = 0
         if force:
             settings['gl'] = time.time()
         elif not settings.get('gl', 0):
@@ -237,9 +242,9 @@ class GMail():
         cls.singleton = cls.singleton or cls()
         with cls.singleton as reader:
             reader.process_messages(days_count)
-        print('GMAIL: loaded %d days' % days_count, storage.Storage.stats)
-        storage.Storage.stats.clear()
         contact.cleanup()
+        print('GMAIL: loaded %d days, %d messages' % (days_count, cls.messages_loaded))
+        storage.Storage.print_search_stats()
         storage.Storage.stats.clear()
 
 
