@@ -1,9 +1,10 @@
 import collections
-from importers import contact
 import storage
 import stopwords
+import re
 
-MAX_NUMBER_OF_ITEMS = 150
+MAX_NUMBER_OF_ITEMS = 250
+MOST_COMMON_COUNT = 50
 ITEMS_PER_DOMAIN = 21
 
 
@@ -26,7 +27,7 @@ class TooMuch(storage.Data):
         super(TooMuch, self).__init__('Search is too broad: %d results not shown.' % count)
         self.kind = 'label'
         self.color = 'red'
-        self.font_size = 32
+        self.font_size = 48
 
 
 def add_contact(contact, contacts):
@@ -57,13 +58,12 @@ def add_persons(items, labels, me):
 
 
 def remove_duplicates(items, keep_duplicates):
-    if len(items) < 100 or keep_duplicates:
-        return items
     duplicates = set()
     items = sorted(items, key=lambda item: item.image)
-    results = [item for item in items if not item.is_duplicate(duplicates)]
-    if len(results) > 500:
-        too_much = TooMuch(len(results) - 500)
+    results = [item for item in items if keep_duplicates or not item.is_duplicate(duplicates)]
+    if len(results) > MAX_NUMBER_OF_ITEMS:
+        too_much = TooMuch(len(results) - MAX_NUMBER_OF_ITEMS)
+        results = results[:MAX_NUMBER_OF_ITEMS]
         results.append(too_much)
     return results
 
@@ -71,9 +71,13 @@ def remove_duplicates(items, keep_duplicates):
 def get_most_common_words(items, query):
     counter = collections.Counter()
     for item in items:
-        counter.update([word for word in item.words if len(word) < 21 and not stopwords.is_stopword(word)])
-    most_common_count = max(25, min(50, int(len(items) / 3)))
-    most_common = {key for key, count in counter.most_common(most_common_count)}
+        item.update_words(items)
+        counter.update([
+            word.lower()
+            for word in map(lambda(w): filter(type(w).isalnum, w), item.words)
+            if len(word) < 21 and not stopwords.is_stopword(word)
+        ])
+    most_common = {key for key, count in counter.most_common(MOST_COMMON_COUNT)}
     if ' ' in query:
         pass # most_common.update(stopwords.remove_stopwords(query))
     if query in most_common:
@@ -116,7 +120,7 @@ def get_labels(all_items, query='', me='', keep_duplicates=False):
 
 def debug_results(labels, all_items, items):
     show_details = False
-    print('found', len(labels), 'labels with', len(items), 'items, for ', len(all_items), 'items.')
+    print('found %d labels with %d items, for %d total items' % (len(labels), len(items), len(all_items)))
     print('Included:')
 
     def shorten(x):
@@ -124,30 +128,30 @@ def debug_results(labels, all_items, items):
         return x
 
     for item in items:
-        print('   ', item.kind, repr(item.label), item.uid)
+        print('   %s %s %s' % (item.kind, repr(item.label), item.uid))
         if show_details:
             for var in vars(item):
-                print('       ', var, ':', shorten(getattr(item, var)))
+                print('       %s: %s' % (var, shorten(getattr(item, var))))
     for k,v in labels.items():
         print(k.label)
         for item in v:
-            print ('   ', item.kind, item.label)
+            print ('   %s %s' % (item.kind, item.label))
     print('Removed:')
     for item in set(all_items) - set(items):
-        print('   ', item.kind, repr(item.label), item.uid)
+        print('   %s %s %s' % (item.kind, repr(item.label), item.uid))
         if show_details:
             for var in vars(item):
-                print('       ', var, ':', shorten(getattr(item, var)))
+                print('       %s: %s' % (var, shorten(getattr(item, var))))
 
 
 if __name__ == '__main__':
     import time
     start = time.time()
     query = 'funda'
-    items = storage.Storage.search(query)
+    items = storage.Storage.search(query, 5)
     end = time.time()
-    print('search results in ', len(items), 'items in', end-start, 'sec.')
+    print('search results in %d items in %d sec.' % (len(items), end-start))
     labels, all_items = get_labels(items, query)
     for key, items in labels.items():
-        print('label ', repr(key.label), 'has', len(items), 'items')
-    print('found', len(labels), 'labels for', len(all_items), 'items')
+        print('label %s had %d items' % (repr(key.label), len(items)))
+    print('found %d labels for %d items' % (len(labels), len(all_items)))
