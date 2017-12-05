@@ -366,7 +366,7 @@ table.ui-table tr:hover {
 }
 
 .spinner {
-    display: block;
+    display: none;
 }
 
 .spinner img {
