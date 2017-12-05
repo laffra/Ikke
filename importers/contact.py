@@ -47,7 +47,7 @@ def find_contact(email, name='', phones=None, timestamp=None):
             'names': [name] if name else [],
             'phones': phones or [],
         })
-        print('   new contact ==> %s %s' % (email, contact.names))
+        print('CONTACT: new contact ==> %s %s' % (email, contact.names))
         save_queue.add(contact)
     contacts_cache[email] = contact
     contact.timestamp = timestamp
