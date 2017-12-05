@@ -25,6 +25,7 @@ import webbrowser
 
 PORT_NUMBER = 8081
 SERVER_ADDRESS = ('127.0.0.1', PORT_NUMBER)
+NO_SERVER_LOGS = True
 
 MAIN_URL = 'http://localhost:%s' % PORT_NUMBER
 
@@ -56,6 +57,8 @@ class Server(BaseHTTPRequestHandler):
         routes.get(self.path, self.get_file)()
 
     def log_message(self, format, *args):
+        if NO_SERVER_LOGS:
+            return
         message = format % args
         if not 'search_poll' in message:
             print('SERVER: %s' % message)
@@ -119,9 +122,9 @@ class Server(BaseHTTPRequestHandler):
         self.respond(json_text)
 
     def get_resource(self):
-        path = self.args['path']
+        path = os.path.join(os.path.join(os.path.dirname(__file__), 'html'), self.args['path'])
         query = self.args.get('query', '')
-        obj = Storage.resolve(path.replace(' ', '%20'))
+        obj = Storage.resolve(path)
         if obj:
             handler = import_module('importers.%s' % obj['kind'])
             if hasattr(handler, 'render'):
@@ -131,7 +134,7 @@ class Server(BaseHTTPRequestHandler):
                 with open(obj['path'], 'rb') as f:
                     self.respond(f.read())
         else:
-            self.respond(self.load_resource(path.replace(' ', '%20'), 'rb'))
+            self.respond(self.load_resource(path, 'rb'))
 
     def get_jquery(self):
         self.respond(self.load_resource('jquery.js', 'rb'))
@@ -188,6 +191,9 @@ class Server(BaseHTTPRequestHandler):
             self.send_response(404)
 
     def load_resource(self, filename, format='r'):
+        dirname = os.path.dirname(filename).replace(' ', '+')
+        basename = os.path.basename(filename)
+        filename = os.path.join(dirname, basename)
         dirpath = os.path.dirname(os.path.realpath(__file__))
         path = os.path.join(dirpath, os.path.join('html', filename))
         with open(path, format) as fp:
