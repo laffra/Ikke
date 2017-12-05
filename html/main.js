@@ -5,13 +5,18 @@ var search_finished = {};
 var RENDER_AS_GRID = localStorage.rendertype == 'grid';
 var TOP_HEIGHT = 250;
 
+var ALPHA_INITIAL = 0.5
+var ALPHA_WARMUP = 0.2
+var ALPHA_SHAKE = 0.5
+var ALPHA_DRAG = 0.1
+
 function init_tabs() {
     $('#tabs')
         .tabs({
             active : localStorage.getItem('tab', 0),
             activate : function(event, ui) {
                 if (ui.newTab.attr('remember') == 'true') {
-                    localStorage.tab = ui.newTab.parent().children().index(ui.newTab);
+                    render_tab(localStorage.tab = ui.newTab.parent().children().index(ui.newTab));
                 }
             }
         })
@@ -104,22 +109,33 @@ function render() {
     };
 
     $.get("search?" + get_args(query, ''), function() {
-        kinds.forEach(function(kind) {
-            setTimeout(function() {
-                if (!search_finished[kind]) {
-                    $(".spinner")
-                        .css("margin-left", w/3)
-                        .css("margin-top", h/4)
-                        .css("display", "block");
-                }
-            }, 500);
-            if (RENDER_AS_GRID) {
-                load_grid(kind, w, h - TOP_HEIGHT);
-            } else {
-                load_graph(kind, w, h - TOP_HEIGHT);
+        d3.range(kinds.length).forEach(function(index) {
+            if (index == localStorage.tab) {
+                render_tab(index);
             }
-        });
-    })
+        })
+    });
+
+}
+
+function render_tab(index) {
+    var w = window.innerWidth;
+    var h = window.innerHeight;
+    var kind = kinds[index];
+    $("#tabs-" + kind + ' svg').remove();
+    setTimeout(function() {
+        if (!search_finished[kind]) {
+            $(".spinner")
+                .css("margin-left", w/3)
+                .css("margin-top", h/4)
+                .css("display", "block");
+        }
+    }, 500);
+    if (RENDER_AS_GRID) {
+        load_grid(kind, w, h - TOP_HEIGHT);
+    } else {
+        load_graph(kind, w, h - TOP_HEIGHT);
+    }
 }
 
 function nobreaks(html) {
@@ -168,7 +184,6 @@ function load_grid(kind, w, h) {
 function clear_spinner(kind, error, graph) {
     search_finished[kind] = true;
     $(".spinner").css("display", "none");
-    console.log('clear spinnner ' + kind)
     if (error) {
         $('#stats-' + kind).text('An internal error occurred. Details: ' + error);
         $("#sad-" + kind).css("display", "block");
@@ -258,9 +273,9 @@ function load_graph(kind, w, h) {
             .force("link", d3.forceLink().id(function(d) { return d.index }))
             .force("charge", d3.forceManyBody())
             .force("center", d3.forceCenter(w/3, h/2))
-            .force("x", d3.forceX(0.1))
-            .force("y", d3.forceY(0.1))
-            .alpha(0.4)
+            .force("x", d3.forceX(0.05))
+            .force("y", d3.forceY(0.05))
+            .alpha(ALPHA_INITIAL)
             .alphaDecay(0.05);
 
     var w = $(window).width();
@@ -290,7 +305,7 @@ function load_graph(kind, w, h) {
 
     d3.json("graph?" + get_args(query, kind), function(error, graph) {
         svg.attr("width", w - 2 * $('.logo').width() - 96)
-           .attr("height", h);
+           .attr("height", h + TOP_HEIGHT);
         clear_spinner(kind, error, graph);
 
         update_summary(kind, graph);
@@ -303,7 +318,7 @@ function load_graph(kind, w, h) {
             .attr("fill", 'white')
             .attr("width", w)
             .attr("height", h)
-            .on("click", function() { shake(0.5); });
+            .on("click", function() { shake(ALPHA_SHAKE); });
         setCollideRadius();
 
         var linkedByIndex = {};
@@ -375,7 +390,7 @@ function load_graph(kind, w, h) {
                 d3.select(selectId(d, 'text'))
                     .text(function(d) { return d.domain; })
                     .transition()
-                    .attr("y", function(d) { return 2 + d.font_size + d.icon_size/2; })
+                    .attr("y", function(d) { return d.font_size + d.icon_size/2; })
                     .style("font-size", function(d) { return d.font_size + 'px'; });
                 d3.select(selectId(d, 'border'))
                     .transition()
@@ -401,7 +416,7 @@ function load_graph(kind, w, h) {
         }
 
         function dragstarted(d) {
-            shake(0.5);
+            shake(ALPHA_DRAG);
             d.fx = d.x;
             d.fy = d.y;
         }
@@ -470,6 +485,9 @@ function load_graph(kind, w, h) {
                     .attr("y", function(d) { return 0; })
                     .attr("width", function(d) { return 0; })
                     .attr("height", function(d) { return 0; })
+                d3.select(selectId(d, 'text'))
+                    .attr("y", function(d) { return d.font_size + d.icon_size/2 - 2; })
+                    .style("font-size", function(d) { return d.font_size + 'px'; });
             })
             .on("mouseenter", zoomInNode)
             .on("mouseleave", zoomOutNode)
@@ -488,7 +506,7 @@ function load_graph(kind, w, h) {
         node.append("text")
             .attr("id", function(d) { return getId(d, 'text'); })
             .attr("x", 0)
-            .attr("y", function(d) { return d.image ? 2 + d.font_size + d.icon_size/2 : 7; })
+            .attr("y", function(d) { return d.font_size + d.icon_size/2 - 2; })
             .style("font-size", function(d) { return d.font_size; })
             .attr("fill", function(d) { return d.color; })
             .text(function(d) { return d.image ? d.domain : d.label; })
@@ -510,6 +528,16 @@ function load_graph(kind, w, h) {
             });
         });
 
+        function warmup() {
+            d3.range(7).forEach(function() {
+                force.alpha(ALPHA_INITIAL);
+                while (force.alpha() > ALPHA_WARMUP) {
+                    force.tick();
+                }
+            })
+            shake(ALPHA_WARMUP);
+        }
+
         function resize() {
             var width = $(window).width();
             var height = $(window).height() - TOP_HEIGHT;
@@ -520,7 +548,7 @@ function load_graph(kind, w, h) {
 
         resize();
         d3.select(window).on("resize", resize);
-        shake(2);
+        warmup();
     });
 }
 
