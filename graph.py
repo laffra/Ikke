@@ -13,7 +13,6 @@ import time
 from importers import browser
 from importers import contact
 from importers import gmail
-import google
 import classify
 from threadpool import ThreadPool
 from storage import Storage
@@ -41,28 +40,15 @@ class Graph:
         self.query = query
         self.search_results = defaultdict(list)
         self.search_duration = defaultdict(list)
-        #self.google_pool = ThreadPool([
-            # (self.search_google, (1,)),
-            # (self.search_google, (11,)),
-        #])
         self.my_pool = ThreadPool(1, [
-            (self.search_me, days[duration_string])
+            (self.search, days[duration_string])
         ])
 
     def add_result(self, kind, items, duration):
         self.search_results[kind] = set(self.search_results[kind] + list(items))
         self.search_duration[kind].append(duration)
 
-    def search_all(self):
-        start_time = time.time()
-        self.my_pool.wait_completion()
-        items = self.search_results['me']
-        self.add_result('all', items, time.time() - start_time)
-
-    def search_google(self, start_position):
-        google.search(self.query, start_position)
-
-    def search_me(self, timestamp):
+    def search(self, timestamp):
         start_time = time.time()
         all_items = Storage.search(unquote(self.query), timestamp)
         duration = time.time() - start_time
@@ -78,7 +64,6 @@ class Graph:
         if kind == 'contact':
             labels = {}
             items = [item for item in items if item.kind == 'contact']
-        print('GRAPH: found %d items for %s' % (len(items), kind))
         removed_item_count = max(0, len(found_items) - len(items))
         items = list(set(items + list(labels.keys())))
 
