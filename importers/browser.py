@@ -177,7 +177,7 @@ class BrowserItem(storage.Data):
 
 
 def normalize_url(url):
-    while url[-1] == '/':
+    while url and url[-1] == '/':
         url = url[:-1]
     return url
 

@@ -23,8 +23,8 @@ else:
 MAXIMUM_DAYS_LOAD = 3650
 
 URL_MATCH_RE = re.compile('href=[\'"]((https?):((//)|(\\\\))+([\w\d:#@%/;$()~_?\+-=\\\.&](#!)?)*)')
-
 DATESTRING_RE = re.compile(' [-+].*')
+
 
 PATH_ATTRIBUTES = {
     'kind',

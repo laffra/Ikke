@@ -3,15 +3,14 @@ from __future__ import print_function
 import cache
 import datetime
 from importlib import import_module
-import itertools
 import json
 import os
+import re
 import shutil
 import stat
 import stopwords
 import subprocess
 import time
-from utils import get_timestamp
 
 import sys
 if sys.version_info >= (3,):
@@ -20,19 +19,18 @@ if sys.version_info >= (3,):
     from urllib.parse import unquote
 else:
     JSONDecodeError = ValueError
-    from urllib import pathname2url
     def quote(s,safe=''):
         return s.replace('/', '%2F')
     from urllib import url2pathname
     def unquote(s): return url2pathname(s)
 
-import uuid
 from collections import defaultdict
 
 HOME_DIR = os.path.join(os.path.expanduser('~'), 'IKKE')
 HOME_DIR_SEGMENT_COUNT = len(HOME_DIR.split(os.path.pathsep))
 CLEANUP_FILE_NAME_RE = '([^a-zA-Z0-9]|http|www|https)'
 ITEMS_DIR = os.path.join(HOME_DIR, 'items')
+ILLEGAL_FILENAME_CHARACTERS = re.compile(r'[~#%&*{}:<>?+|"]')
 
 GET_COMMENT_SCRIPT = '''osascript<<END
     tell application "Finder"
@@ -97,7 +95,8 @@ class Storage:
     @classmethod
     def get_local_path(cls, obj):
         # type: (dict) -> str
-        local_path = os.path.join(os.path.join(ITEMS_DIR, obj['kind']), obj['uid'])
+        uid = re.sub(ILLEGAL_FILENAME_CHARACTERS, '_', obj['uid'])
+        local_path = os.path.join(os.path.join(ITEMS_DIR, obj['kind']), uid)
         if obj['kind'] != 'file':
             local_path += '.txt'
         parent_dir = os.path.dirname(local_path)
@@ -116,7 +115,7 @@ class Storage:
         assert type(data['timestamp']) in (int,float), "Number timestamp needed, not %s" % type(data['timestamp'])
         cls.stats['writes'] += 1
         path = cls.get_local_path(data)
-        # print('STORAGE: write %s - %s %s' % (path, data['kind'], data['uid']))
+        print('STORAGE: write %s - %s %s' % (path, data['kind'], data['uid']))
         try:
             with open(path, format) as fout:
                 fout.write(body)
@@ -174,16 +173,15 @@ class Storage:
         # type: (str) -> dict
         contact = cls.search_cache.get(email)
         if not contact:
-            path = os.path.join(HOME_DIR, 'contact', 'email', quote(email))
-            for root, dirs, files in os.walk(path):
-                for file in files:
-                    with open(os.path.join(root, file), 'r') as f:
-                        from importers import contact
-                        try:
-                            contact = contact.deserialize(json.loads(f.read()))
-                            cls.stats['contacts read'] += 1
-                        except:
-                            pass
+            path = os.path.join(HOME_DIR, 'items', 'contact', email + '.txt')
+            if os.path.exists(path):
+                with open(path, 'r') as f:
+                    from importers import contact
+                    try:
+                        contact = contact.deserialize(json.loads(f.read()))
+                        cls.stats['contacts read'] += 1
+                    except:
+                        pass
             cls.search_cache[email] = contact
         return contact
 
@@ -356,10 +354,10 @@ if __name__ == '__main__':
             print('%s  %s' % (now - datetime.datetime.fromtimestamp(timestamp), path))
         print()
 
-    if True:
+    if False:
         File('/Users/laffra/IKKE/items/file/<CALA7AgVq6zqJarWf9gY+r+kPQMxqZnp3JSQovhuAh6=DryGjTg@mail.gmail.com>/Trip on 16 Nov 17 - PNR ref AMMF2I.pdf')
 
-    if False:
+    if True:
         for k,v in Storage.search_contact('laffra@gmail.com').items():
             if v:
                 print('%s=%s' % (k,v))
