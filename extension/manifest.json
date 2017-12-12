@@ -5,7 +5,7 @@
    },
    "content_scripts": [ {
       "all_frames": true,
-      "js": [ "jquery.js", "jquery-addons.js", "jquery-ui.min.js", "dothis.js", "setup.js", "contentscript.js" ],
+      "js": [ "jquery.js", "jquery-addons.js", "jquery-ui.min.js", "dothis.js", "settings.js", "contentscript.js" ],
       "css": [ "jquery-ui.min.css" ],
       "matches": [ "http://*/*", "https://*/*" ]
    } ],

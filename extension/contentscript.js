@@ -8,7 +8,7 @@ document.addEventListener('keyup', scheduleTracker);
 
 function scheduleTracker() {
     clearTimeout(timer);
-    timer = setTimeout(runTracker, 1000);
+    timer = setTimeout(runTracker, 5000);
 }
 
 function getBrowserUrl() {
@@ -29,21 +29,28 @@ function runTracker() {
 }
 
 function getFirstBigImage() {
-    var images = $('img')
-        .filter(function() {
-            return $(this).isInViewport();
-        })
+    function isTarget() {
+        var tagName = $(this).prop('tagName');
+        var bg = $(this).css('background-image');
+        return (tagName === 'IMG' || tagName == 'DIV' && bg && bg != 'none') &&
+            $(this).isInViewport() && $(this).width() <= 256 && $(this).height() <= 256;
+    }
+    var images = $('img, div')
+        .filter(isTarget)
         .sort(function(a, b) {
             return $(b).width()*$(b).height() - $(a).width()*$(a).height();
         });
-    src = images.length > 0 ? images.eq(0).attr('src') : '';
-    if (src && src.startsWith('//')) {
-        src = document.location.protocol + src;
+    if (images) {
+        var img = images.eq(0);
+        var src = img.attr('src') || img.css('background-image').replace('url("', '').replace('")', '');
+        if (src && src.startsWith('//')) {
+            src = document.location.protocol + src;
+        }
+        else if (src && !src.startsWith('http://') && !src.startsWith('https://') && !src.startsWith('data:')) {
+            src = document.location.protocol + '//' + document.location.host + '/' + src;
+        }
+        return src
     }
-    else if (src && !src.startsWith('http://') && !src.startsWith('https://') && !src.startsWith('data:')) {
-        src = document.location.protocol + '//' + document.location.host + '/' + src;
-    }
-    return src
 }
 
 function highlightSearch() {
@@ -82,5 +89,9 @@ function track(location, selection) {
     chrome.runtime.sendMessage(data);
 }
 
-scheduleTracker();
-highlightSearch();
+if (window.self == window.top) {
+    scheduleTracker();
+    highlightSearch();
+}
+
+console.log('Ikke: contentscript.js loaded.')
