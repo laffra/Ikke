@@ -1,11 +1,14 @@
 import datetime
+import logging
 import os
 from os.path import expanduser
 import re
+from settings import settings
 import shutil
 import sqlite3
 from storage import Storage
 import sys
+import time
 import utils
 
 if sys.version_info >= (3,):
@@ -48,6 +51,7 @@ CLEANUP_URL_PATH_RE = re.compile('\W+')
 MAX_FILENAME_LENGTH = 75
 
 chrome_epoch = datetime.datetime(1601,1,1)
+loading_items = False
 
 
 def get_history_path():
@@ -67,9 +71,10 @@ def adjust_chrome_timestamp(chrome_timestamp):
 
 def process_url(rows):
     for n,row in enumerate(rows):
+        settings['browser/added'] = settings['browser/added'] + 1
         visit_count, last_visit_time, title, url = row
         if n % 1000 == 0:
-            print('BROWSER: Add %s %s' % (title, url))
+            logging.debug('Add %s %s' % (title, url))
         if title:
             track(url, title, '', get_favicon(url), '', adjust_chrome_timestamp(last_visit_time), force=True)
 
@@ -92,7 +97,7 @@ def track(url, title, image, favicon, selection, timestamp=0, force=False):
     if not force and not image and not selection:
         return
 
-    print('BROWSER: Track %s %s' % (timestamp, url))
+    logging.debug('Track %s %s' % (url, image))
     Storage.add_data({
         'kind': 'browser',
         'uid': uid,
@@ -103,6 +108,7 @@ def track(url, title, image, favicon, selection, timestamp=0, force=False):
         'favicon': favicon,
         'selection': selection,
         'title': title,
+        'words': list(set(word.lower() for word in stopwords.remove_stopwords('%s %s' % (selection, title)))),
         'timestamp': timestamp or utils.get_timestamp()
     })
 
@@ -114,21 +120,46 @@ def load_history():
     shutil.copy(history_path, copy_path)
     connection = sqlite3.connect(copy_path)
     cursor = connection.cursor()
-    load(cursor, HISTORY_QUERY_URLS, process_url)
-
-
-def load(cursor, query, processor):
+    query = HISTORY_QUERY_URLS
     cursor.execute(query)
     thread_count = 64
     pool = ThreadPool(thread_count)
-    print('BROWSER: Loading browser history')
+    logging.info('Loading browser history')
+    settings['browser/added'] = 0
+    settings['browser/when'] = time.time()
     rows = cursor.fetchall()
     chunk_size = 2 * int(len(rows) / thread_count)
     for n in range(thread_count + 1):
         start, end = n*chunk_size, (n+1)*chunk_size
-        pool.add_task(processor, rows[start: end])
+        pool.add_task(process_url, rows[start: end])
     pool.wait_completion()
-    print('BROWSER: %d urls added with %d threads with chunksize %d.' % (len(rows), thread_count, chunk_size))
+    logging.info('%d urls added with %d threads with chunksize %d.' % (len(rows), thread_count, chunk_size))
+
+
+def history():
+    msg = 'Browser history not yet loaded.'
+    count = settings.get('browser/added', 0)
+    if count > 0:
+        timestamp = settings.get('browser/when', 0)
+        when = datetime.datetime.fromtimestamp(timestamp).date()
+        msg = 'Loaded %d sites from your browser history on %s' % (count, when)
+        if loading_items:
+            msg += '. Loading more items...'
+    return msg
+
+
+def load():
+    global loading_items
+    loading_items = True
+    try:
+        load_history()
+    finally:
+        loading_items = False
+
+
+def stop_loading():
+    global loading_items
+    loading_items = False
 
 
 class BrowserItem(storage.Data):
@@ -149,7 +180,6 @@ class BrowserItem(storage.Data):
         self.font_size = 12
         self.zoomed_icon_size = 256 if self.image else 24
         words = '%s %s %s' % (self.title, self.selection, self.url)
-        self.words = list(set(stopwords.remove_stopwords(words.replace('+', ' '))))
         self.timestamp = obj['timestamp']
         self.node_size = 1
         dict.update(self, vars(self))

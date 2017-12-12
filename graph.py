@@ -1,4 +1,5 @@
 from collections import defaultdict
+import logging
 import json
 
 import sys
@@ -36,34 +37,35 @@ PREMIUM_ITEM_KINDS = { 'facebook', 'twitter', 'linkedin' }
 
 class Graph:
     def __init__(self, query, duration_string):
-        print('GRAPH: init %s %s' % (repr(query), duration_string))
+        logging.info('GRAPH: init %s %s' % (repr(query), duration_string))
         self.query = query
+        self.search_count = {}
         self.search_results = defaultdict(list)
         self.search_duration = defaultdict(list)
         self.my_pool = ThreadPool(1, [
             (self.search, days[duration_string])
         ])
 
-    def add_result(self, kind, items, duration):
+    def add_result(self, kind, count, items, duration):
         self.search_results[kind] = set(self.search_results[kind] + list(items))
+        self.search_count[kind] = count
         self.search_duration[kind].append(duration)
+        logging.info('found %d %s items' % (len(items), kind))
 
     def search(self, timestamp):
         start_time = time.time()
         all_items = Storage.search(unquote(self.query), timestamp)
         duration = time.time() - start_time
-        self.add_result('all', all_items, duration)
+        self.add_result('all', len(all_items), all_items, duration)
         for kind in MY_ITEM_KINDS:
             items = [item for item in all_items if item.kind in ('label', kind)]
-            self.add_result(kind, items, duration)
+            self.add_result(kind, len(items), items, duration)
 
     def get_graph(self, kind, keep_duplicates):
         self.my_pool.wait_completion()
-        found_items = self.search_results['gmail' if kind == 'contact' else kind]
-        labels, items = classify.get_labels(found_items, self.query, MY_EMAIL_ADDRESS, keep_duplicates)
-        if kind == 'contact':
-            labels = {}
-            items = [item for item in items if item.kind == 'contact']
+        found_items = self.search_results[kind]
+        count = self.search_count[kind]
+        labels, items = classify.get_labels(count, found_items, self.query, MY_EMAIL_ADDRESS, keep_duplicates)
         removed_item_count = max(0, len(found_items) - len(items))
         items = list(set(items + list(labels.keys())))
 

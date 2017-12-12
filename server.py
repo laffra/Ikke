@@ -1,5 +1,6 @@
 import dothis
 from importers import browser
+import logging
 import graph
 import poller
 from settings import settings
@@ -25,7 +26,6 @@ import webbrowser
 
 PORT_NUMBER = 8081
 SERVER_ADDRESS = ('127.0.0.1', PORT_NUMBER)
-NO_SERVER_LOGS = True
 
 MAIN_URL = 'http://localhost:%s' % PORT_NUMBER
 
@@ -41,13 +41,16 @@ class Server(BaseHTTPRequestHandler):
     def do_GET(self):
         routes = {
             '/': self.get_index,
+            '/clear': self.clear,
+            '/history': self.history,
             '/load': self.load,
+            '/stopload': self.stop_loading,
             '/track': self.track,
             '/dothis': self.dothis,
             '/extensions': self.extensions,
             '/get': self.get_resource,
             '/open': self.open_local,
-            '/install': self.install,
+            '/settings': self.settings,
             '/setup': self.handle_setup,
             '/jquery.js': self.get_jquery,
             '/search': self.search,
@@ -57,11 +60,9 @@ class Server(BaseHTTPRequestHandler):
         routes.get(self.path, self.get_file)()
 
     def log_message(self, format, *args):
-        if NO_SERVER_LOGS:
-            return
         message = format % args
         if not 'search_poll' in message:
-            print('SERVER: %s' % message)
+            logging.debug(message)
 
     def parse_args(self):
         try:
@@ -73,9 +74,13 @@ class Server(BaseHTTPRequestHandler):
         except ValueError:
             self.args = {}
 
-    def install(self):
-        html = self.jinja2_env.get_template('setup.html').render({
+    def settings(self):
+        html = self.jinja2_env.get_template('settings.html').render({
             'location': os.path.dirname(os.path.realpath(__file__)),
+            'kinds': graph.ALL_ITEM_KINDS[1:],
+            'counts': { kind: Storage.get_item_count(kind) for kind in graph.ALL_ITEM_KINDS[1:] },
+            'history': { kind: Storage.get_history(kind) for kind in graph.ALL_ITEM_KINDS[1:] },
+            'gmail_needed': 'gu' not in settings,
         })
         self.respond(html)
 
@@ -91,12 +96,12 @@ class Server(BaseHTTPRequestHandler):
         try:
             self.wfile.write(message)
         except Exception as e:
-            print('SERVER: Client went away: %s' % e)
+            logging.error('Client went away: %s' % e)
 
     def get_index(self):
         if not 'gu' in settings:
             dothis.activate('myaccount.google.com/apppasswords')
-            return self.install()
+            return self.settings()
 
         html = self.jinja2_env.get_template('index.html').render({
             'query': self.args.get('q', ''),
@@ -106,20 +111,38 @@ class Server(BaseHTTPRequestHandler):
         })
         self.respond(html)
 
+    def clear(self):
+        if True or Storage.clear(self.args.get('kind', '')):
+            self.respond('OK')
+
+    def history(self):
+        self.respond(Storage.get_history(self.args.get('kind', '')))
+
     def search(self):
         query = self.args.get('q', '')
         settings['query'] = query
         duration = self.args.get('duration', 'year')
-        print('SERVER: search %s %s' % (duration, query))
+        logging.info('search %s %s' % (duration, query))
         self.graphs[query] = graph.Graph(query, duration)
+        self.respond('OK')
+
+    def stop_loading(self):
+        Storage.stop_loading(self.args['kind'])
+        self.respond('OK')
+
+    def load(self):
+        Storage.load(self.args['kind'])
         self.respond('OK')
 
     def get_graph(self):
         query = self.args.get('q')
         keep_duplicates = self.args.get('d', '0') == '1'
         kind = self.args['kind']
-        json_text = json.dumps(self.graphs[query].get_graph(kind, keep_duplicates))
-        self.respond(json_text)
+        graph = self.graphs[query].get_graph(kind, keep_duplicates)
+        for node in graph['nodes']:
+            if node['kind'] == 'contact' and node['label'].lower() == query.lower():
+                node['fixed'] = True
+        self.respond(json.dumps(graph))
 
     def get_resource(self):
         path = os.path.join(os.path.join(os.path.dirname(__file__), 'html'), self.args['path'])
@@ -145,7 +168,7 @@ class Server(BaseHTTPRequestHandler):
         })
         self.respond(html)
 
-    def load(self):
+    def load_items(self):
         items = Storage.search_file('"%s"' % self.args['uid'])
         for n, item in enumerate(items):
             if 'path' in item and os.path.exists(item['path']):
@@ -187,7 +210,7 @@ class Server(BaseHTTPRequestHandler):
                 pass
             self.respond(payload)
         except Exception as e:
-            print('Fail on %s: %s' % (self.path, e))
+            logging.error('Fail on %s: %s' % (self.path, e))
             self.send_response(404)
 
     def load_resource(self, filename, format='r'):

@@ -2,7 +2,7 @@ import re
 
 WORDS_RE = re.compile('([^a-zA-Z])+')
 
-WEB_WORDS = " pdf | gif | jpg | jpeg | https | http | org | gov | com | nl | index | html | doc | uid | rfc "
+WEB_WORDS = " utf | pdf | gif | jpg | jpeg | https | http | org | gov | com | nl | index | html | doc | uid | rfc "
 EMAIL_WORDS = " re | fwd | fw "
 DUTCH_STOPWORDS = " op | de | den | voor | aan | af | al | als | bij | dan | dat | die | dit | een | en | er | had | heb | hem | het | hij | hoe | hun | ik | in | is | je | kan | me | men | met | mij | nog | nu | of | ons | ook | te | tot | uit | van | was | wat | we | wel | wij | zal | ze | zei | zij | zo | zou "
 DATETIME_WORDS = " week | month | year | today | tomorrow | am | pm | jan | feb | mar | apr | may | jun jul aug | sep | oct | nov | dec | january | february | march | april | may | june | july | august | september | october | november | december | mon | tue | wed | thu | fri | sat | sun | [a-z]*day "

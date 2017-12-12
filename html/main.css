@@ -342,6 +342,15 @@ table.ui-table tr:hover {
     background: white;
 }
 
+#dashboard {
+    margin: 10px;
+}
+
+#dashboard span {
+    font-size: 12px;
+    margin: 0 2px;
+}
+
 .sad {
     display: none;
     margin: 100px;

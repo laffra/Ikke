@@ -1,0 +1,43 @@
+<html>
+<head>
+    <link rel="chrome-webstore-item" href="https://chrome.google.com/webstore/detail/fmeadohikadcafhjaijonglpjdnncnal">
+    <link rel="stylesheet" href="settings.css">
+    <script src="3rd/jquery-3.2.1.min.js"></script>
+</head>
+<body>
+
+<h1>IKKE Settings</h1>
+
+<div id="ikke-extension">
+    Setup Step 1: <button onclick="setup_extension_local()">Enable the extension</button>
+</div>
+
+{% if gmail_needed %}
+<div id="ikke-gmail-needed">
+    Setup Step 2: <button onclick="setup_gmail()">Set up gmail</button>
+</div>
+{% else %}
+<div id="ikke-settings">
+    <ul>
+    {% for kind in kinds %}
+        {% if counts[kind] %}
+        <li>
+            <span class="setting" kind='{{kind}}'>
+                <button class='clear-button'>
+                    Delete {{ counts[kind] }} {{ kind }} item{{ '' if counts[kind] == 1 else 's' }}
+                </button>
+                <button class="load-button" id="load-button-{{kind}}">Load more items</button>
+                <span class="history">{{ history[kind] }}</span>
+                <img id="spinner-{{kind}}" src="get?path=icons/loading_spinner.gif" class="spinner">
+            </span>
+        </li>
+        {% endif %}
+    {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<script src="settings.js"></script>
+
+</body>
+</html>

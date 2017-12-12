@@ -32,11 +32,13 @@ class Cache(dict):
 
 
 if __name__ == '__main__':
+    import logging
+    logging.set_level(logging.DEBUG)
     cache = Cache(2, foo=1, bar=2)
-    print(cache)
+    logging.debug(cache)
     assert cache['foo']
     assert cache.get('foo')
     time.sleep(3)
     assert cache['foo'] is None
     assert cache.get('foo') is None
-    print(cache)
+    logging.debug(cache)

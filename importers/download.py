@@ -1,6 +1,7 @@
+import datetime
 import os
+import logging
 from settings import settings
-import stopwords
 import storage
 import time
 
@@ -24,10 +25,10 @@ class Download:
             for filename in filter(lambda f: f[0] != '.', files):
                 name, extension = os.path.splitext(filename)
                 file_path = os.path.join(path, filename)
-                timestamp = os.path.getmtime(file_path)
+                timestamp = os.path.getctime(file_path)
                 if timestamp > last_check:
                     if extension.lower() in SKIP_CONTENT:
-                        print('DOWNLOAD: skip %s' % filename)
+                        logging.info('skip %s' % filename)
                         continue
                     with open(file_path, 'rb') as fin:
                         storage.Storage.add_binary_data(fin.read(), {
@@ -35,17 +36,22 @@ class Download:
                             'kind': 'file',
                             'timestamp': timestamp,
                         })
-                    print('DOWNLOAD: add %s' % filename)
+                    logging.info('add %s' % filename)
                 if now - timestamp > ONE_WEEK_SECONDS:
-                    pass
-                    # print('DOWNLOAD: discard', filename)
+                    logging.debug('DOWNLOAD: discard', filename)
                     # os.remove(file_path)
 
         settings['download/lastcheck'] = now
 
+    @classmethod
+    def history(cls):
+        timestamp = settings.get('download/xlastcheck', time.time())
+        return datetime.datetime.fromtimestamp(timestamp).date()
+
 
 load = Download.load
 poll = Download.load
+history = Download.history
 
 
 def cleanup():

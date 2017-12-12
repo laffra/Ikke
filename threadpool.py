@@ -49,13 +49,14 @@ class ThreadPool:
 
 
 if __name__ == "__main__":
+    import logging
     from time import sleep
     import time
 
     start = time.time()
 
     def wait_delay(d):
-        print("sleeping for (%d)sec" % d)
+        logging.info("sleeping for (%d)sec" % d)
         sleep(d)
 
     pool = ThreadPool(15)
@@ -65,4 +66,4 @@ if __name__ == "__main__":
     pool.add_task(wait_delay, 5)
     pool.wait_completion()
 
-    print('The 4 tasks took %.1fs, not 11s' % (time.time() - start))
+    logging.info('The 4 tasks took %.1fs, not 11s' % (time.time() - start))

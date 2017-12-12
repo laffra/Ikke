@@ -34,7 +34,9 @@ if __name__ == '__main__':
     # settings.clear()
 
     import random
-    print(settings)
+    import logging
+    logging.set_level(logging.DEBUG)
+    logging.debug(settings)
     settings['abc'] = random.randint(0, 100)
     settings['xyz'] = random.randint(0, 100)
-    print(settings)
+    logging.debug(settings)

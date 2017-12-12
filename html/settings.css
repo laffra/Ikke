@@ -1,0 +1,37 @@
+
+.setting button {
+    background: lightgreen;
+    border: 1px solid grey;
+    padding: 5px;
+    cursor: pointer;
+    display: inline;
+}
+
+.setting button.loading {
+    background: pink;
+}
+
+.setting button:focus {
+    outline: none;
+}
+
+.setting button:disabled {
+    background: pink;
+}
+
+#ikke-extension {
+    opacity: 0;
+}
+
+.setting span,a {
+    font-size: 12px;
+    margin: 4px;
+}
+
+.spinner {
+    visibility: hidden;
+    top: 11px;
+    width: 32px;
+    height: 32px;
+    position: relative;
+}

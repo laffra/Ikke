@@ -1,9 +1,8 @@
-from __future__ import print_function
-
 import cache
 import datetime
 from importlib import import_module
 import json
+import logging
 import os
 import re
 import shutil
@@ -14,9 +13,7 @@ import time
 
 import sys
 if sys.version_info >= (3,):
-    from json.decoder import JSONDecodeError
     from urllib.parse import quote
-    from urllib.parse import unquote
 else:
     JSONDecodeError = ValueError
     def quote(s,safe=''):
@@ -31,6 +28,7 @@ HOME_DIR_SEGMENT_COUNT = len(HOME_DIR.split(os.path.pathsep))
 CLEANUP_FILE_NAME_RE = '([^a-zA-Z0-9]|http|www|https)'
 ITEMS_DIR = os.path.join(HOME_DIR, 'items')
 ILLEGAL_FILENAME_CHARACTERS = re.compile(r'[~#%&*{}:<>?+|"]')
+MAX_NUMBER_OF_ITEMS = 250
 
 GET_COMMENT_SCRIPT = '''osascript<<END
     tell application "Finder"
@@ -95,8 +93,7 @@ class Storage:
     @classmethod
     def get_local_path(cls, obj):
         # type: (dict) -> str
-        uid = re.sub(ILLEGAL_FILENAME_CHARACTERS, '_', obj['uid'])
-        local_path = os.path.join(os.path.join(ITEMS_DIR, obj['kind']), uid)
+        local_path = os.path.join(os.path.join(ITEMS_DIR, obj['kind']), obj['uid'])
         if obj['kind'] != 'file':
             local_path += '.txt'
         parent_dir = os.path.dirname(local_path)
@@ -115,13 +112,17 @@ class Storage:
         assert type(data['timestamp']) in (int,float), "Number timestamp needed, not %s" % type(data['timestamp'])
         cls.stats['writes'] += 1
         path = cls.get_local_path(data)
-        print('STORAGE: write %s - %s %s' % (path, data['kind'], data['uid']))
+        logging.debug('write %s' % path)
+        for k,v in data.items():
+            logging.debug('     %09s %s' % (k,v))
         try:
             with open(path, format) as fout:
                 fout.write(body)
             os.utime(path, (data['timestamp'], data['timestamp']))
+            if path in cls.file_cache:
+                del cls.file_cache[path]
         except IOError as e:
-            print(e)
+            logging.error('Cannot add file: %s' % e)
             raise
 
     @classmethod
@@ -144,29 +145,35 @@ class Storage:
         assert isinstance(query, str)
         assert isinstance(days, int), 'unexpected type %s: %s' % (type(days), days)
         search_start = time.time()
-        paths = list(cls.run_command(cls.get_search_command(query, days)))
+        command = cls.get_search_command(query, days)
+        paths = filter(None, cls.run_command(command))
+        logging.info('Run command "%s" ==> %d results' % (' '.join(command), len(paths)))
         resolve_start = time.time()
         results = list(filter(None, map(cls.resolve, paths)))
-        cls.log_search_stats(query, len(paths), time.time() - search_start, len(results), time.time() - resolve_start)
+        cls.record_search_stats(query, len(paths), time.time() - search_start, len(results), time.time() - resolve_start)
+        for n,item in enumerate(results):
+            logging.debug('%d: %s %s' % (n, item.kind, item.label))
+        cls.log_search_stats(query)
         return results
 
     @classmethod
-    def log_search_stats(cls, query,  search_count, search_duration, resolve_count, resolve_duration):
+    def record_search_stats(cls, query,  search_count, search_duration, resolve_count, resolve_duration):
         cls.stats['searches'] += 1
         cls.stats['raw results'] = search_count
         cls.stats['search time'] += search_duration
         cls.stats['results'] = resolve_count
         cls.stats['resolve time'] += resolve_duration
-        cls.print_search_stats(query)
+        cls.log_search_stats(query)
 
     @classmethod
-    def print_search_stats(cls, query=None):
-        print('STORAGE: %s STATS %s' % ('#'*32, '#'*32))
+    def log_search_stats(cls, query=None):
+        logging.debug('Storage Statistics:')
+        logging.debug(logging.LINE)
         if query:
-            print('STORAGE: query: "%s"' % query)
+            logging.debug('    query: "%s"' % query)
         for k,v in cls.stats.items():
-            print('STORAGE: %s: %s' % (k, v))
-        print('STORAGE: %s' % ('#'*71))
+            logging.debug('    %s: %s' % (k, v))
+        logging.debug(logging.LINE)
 
     @classmethod
     def search_contact(cls, email):
@@ -194,7 +201,7 @@ class Storage:
     def resolve(cls, path):
         # type: (str) -> (dict,None)
         if not path or not os.path.isfile(path):
-            # print('STORAGE: skip non file: %s' % path[len(HOME_DIR):])
+            logging.debug('skip non file: %s' % path[len(HOME_DIR):])
             return None
         item = cls.file_cache.get(path)
         if not item:
@@ -204,12 +211,22 @@ class Storage:
                     obj = json.loads(f.read())
                     Storage.stats['items read'] += 1
                 except Exception as e:
+                    logging.debug('no json: %s' % path)
                     Storage.stats['files'] += 1
                     item = File(path)
             if obj:
                 item = cls.to_item(obj, path)
             cls.file_cache[path] = item
         return item
+
+    @classmethod
+    def get_history(cls, kind):
+        try:
+            handler = import_module('importers.%s' % kind)
+            return handler.history()
+        except Exception as e:
+            logging.error('No history for %s: %s' % (kind, e))
+            return ''
 
     @classmethod
     def to_item(cls, obj, path):
@@ -235,7 +252,6 @@ class Storage:
     @classmethod
     def run_command(cls, command):
         # type: (list) -> str
-        print('SERVER: run %s' % ' '.join(command))
         process = subprocess.Popen(command, stdout=subprocess.PIPE)
         stdout, stderr = process.communicate()
         try:
@@ -251,6 +267,32 @@ class Storage:
             os.mkdir(HOME_DIR)
             os.chmod(HOME_DIR, stat.S_IEXEC)
 
+    @classmethod
+    def get_item_count(cls, kind):
+        path = os.path.join(HOME_DIR, 'items', kind)
+        return len(os.listdir(path)) if os.path.isdir(path) else 0
+
+    @classmethod
+    def load(cls, kind):
+        try:
+            import_module('importers.%s' % kind).load()
+        except Exception as e:
+            logging.error('Could not load %s: %s' % (kind, e))
+
+    @classmethod
+    def stop_loading(cls, kind):
+        try:
+            import_module('importers.%s' % kind).stop_loading()
+        except Exception as e:
+            logging.error('Could not stop loading %s: %s' % (kind, e))
+
+    @classmethod
+    def clear(cls, kind):
+        path = os.path.realpath(os.path.join(HOME_DIR, 'items', kind))
+        if path.startswith(os.path.join(HOME_DIR, 'items')):
+            shutil.rmtree(path)
+            logging.info('Cleared all data for "%s"' % path)
+            return True
 
 class Data(dict):
     def __init__(self, label, obj=None):
@@ -331,37 +373,36 @@ class File(Data):
 
 def delete_all(kind):
     # type (str) -> None
+    logging.set_level(min(logging.LOG_LEVEL, logging.WARNING))
     path = Storage.get_local_path(kind)
     for n in range(10):
-        print('Deleting all of %s in %d seconds' % (path, 10-n))
+        logging.warning('Deleting all of %s in %d seconds' % (path, 10-n))
         time.sleep(1)
     shutil.rmtree(path)
 
 Storage.setup()
 
 if __name__ == '__main__':
+    logging.set_level(logging.DEBUG)
     if False:
         path = "/Users/laffra/IKKE/gmail/content_type/text-html/kind/gmail/label/activity aler ... n alert limit/message_id/<22f44d4d-ad5a-40f6-83dc-336b2b94294c@xtnvs5mta401.xt.local>/receivers/[/1/laffra@gmail.com/senders/[/1/onlinebanking@ealerts.bankofamerica.com/subject/Activity Alert: Electronic or Online Withdrawal Over Your Chosen Alert Limit/thread/activity aler ... n alert limit - ['laffra@gmail.com', 'onlinebanking@ealerts.bankofamerica.com']/timestamp/1510537596/uid/16455 (UID 92562 RFC822 {25744}.txt"
         for k,v in Storage.resolve(path).items():
             if v:
-                print('%s=%s' % (k,v))
-        print()
-
-    if False:
-        results = sorted((os.path.getmtime(result.path),result.path) for result in Storage.search('laffra', days=5))
-        now = datetime.datetime.now()
-        for timestamp,path in results[:5]:
-            print('%s  %s' % (now - datetime.datetime.fromtimestamp(timestamp), path))
-        print()
-
-    if False:
-        File('/Users/laffra/IKKE/items/file/<CALA7AgVq6zqJarWf9gY+r+kPQMxqZnp3JSQovhuAh6=DryGjTg@mail.gmail.com>/Trip on 16 Nov 17 - PNR ref AMMF2I.pdf')
+                logging.debug('%s=%s' % (k,v))
+        logging.debug()
 
     if True:
-        for k,v in Storage.search_contact('laffra@gmail.com').items():
+        for result in Storage.search('Marc sent you ', days=21):
+            logging.debug(logging.LINE)
+            for k,v in result.items():
+                logging.debug('%s:  %s' % (k, v))
+        logging.debug()
+
+    if False:
+        for k,v in Storage.search_contact('messaging-digest-noreply@linkedin.com').items():
             if v:
-                print('%s=%s' % (k,v))
-        print()
+                logging.debug('%s=%s' % (k,v))
+        logging.debug()
 
 
 

@@ -1,11 +1,11 @@
 import collections
+import logging
 import storage
 import stopwords
-import re
 
-MAX_NUMBER_OF_ITEMS = 250
-MOST_COMMON_COUNT = 50
+MOST_COMMON_COUNT = 25
 ITEMS_PER_DOMAIN = 21
+ADD_CONTENT_LABELS = False
 
 
 def shorten(label):
@@ -57,13 +57,13 @@ def add_persons(items, labels, me):
     return non_contacts + list(contacts.values())
 
 
-def remove_duplicates(items, keep_duplicates):
+def remove_duplicates(count, items, keep_duplicates):
     duplicates = set()
     items = sorted(items, key=lambda item: item.image)
     results = [item for item in items if keep_duplicates or not item.is_duplicate(duplicates)]
-    if len(results) > MAX_NUMBER_OF_ITEMS:
-        too_much = TooMuch(len(results) - MAX_NUMBER_OF_ITEMS)
-        results = results[:MAX_NUMBER_OF_ITEMS]
+    if count > storage.MAX_NUMBER_OF_ITEMS:
+        too_much = TooMuch(count - storage.MAX_NUMBER_OF_ITEMS)
+        results = results[:storage.MAX_NUMBER_OF_ITEMS]
         results.append(too_much)
     return results
 
@@ -102,56 +102,68 @@ def merge_repetitive_labels(labels):
     return {label: items for label, items in labels.items() if items}
 
 
-def get_labels(all_items, query='', me='', keep_duplicates=False):
+def get_labels(count, all_items, query='', me='', keep_duplicates=False):
     labels = collections.defaultdict(set)
-    items = remove_duplicates(add_persons(all_items, labels, me), keep_duplicates)
-    most_common_words = get_most_common_words(items, query)
+    items = remove_duplicates(count, add_persons(all_items, labels, me), keep_duplicates)
     default_label = Label(query)
-    for item in items:
-        intersection = set(item.words) & most_common_words
-        for key in intersection:
-            labels[Label(key)].add(item) # add item to a given label
-        if not intersection:
-            labels[default_label].add(item) # avoid "orphan" items
-    labels = merge_repetitive_labels(labels)
+    if ADD_CONTENT_LABELS:
+        most_common_words = get_most_common_words(items, query)
+        for item in items:
+            intersection = set(item.words) & most_common_words
+            for key in intersection:
+                labels[Label(key)].add(item) # add item to a given label
+            if not intersection:
+                labels[default_label].add(item) # avoid "orphan" items
+        labels = merge_repetitive_labels(labels)
+    else:
+        contacts = [item for item in all_items if item.kind == 'contact']
+        contacts = remove_duplicates(count, contacts, keep_duplicates)
+        labels[default_label].update(contacts)
+        items.extend(contacts)
     # debug_results(labels, all_items, items)
     return labels, items
 
 
 def debug_results(labels, all_items, items):
     show_details = False
-    print('found %d labels with %d items, for %d total items' % (len(labels), len(items), len(all_items)))
-    print('Included:')
+    level = logging.get_level()
+    logging.set_level(logging.DEBUG)
+    logging.debug('found %d labels with %d items, for %d total items' % (len(labels), len(items), len(all_items)))
+    logging.debug('Included:')
 
     def shorten(x):
         if isinstance(x, str): return x.replace('\n', ' ')
         return x
 
     for item in items:
-        print('   %s %s %s' % (item.kind, repr(item.label), item.uid))
+        logging.debug('   %s %s %s' % (item.kind, repr(item.label), item.uid))
         if show_details:
             for var in vars(item):
-                print('       %s: %s' % (var, shorten(getattr(item, var))))
+                logging.debug('       %s: %s' % (var, shorten(getattr(item, var))))
     for k,v in labels.items():
-        print(k.label)
+        logging.debug(k.label)
         for item in v:
-            print ('   %s %s' % (item.kind, item.label))
-    print('Removed:')
+            logging.debug ('   %s %s' % (item.kind, item.label))
+    logging.debug('Removed:')
     for item in set(all_items) - set(items):
-        print('   %s %s %s' % (item.kind, repr(item.label), item.uid))
+        logging.debug('   %s %s %s' % (item.kind, repr(item.label), item.uid))
         if show_details:
             for var in vars(item):
-                print('       %s: %s' % (var, shorten(getattr(item, var))))
+                logging.debug('       %s: %s' % (var, shorten(getattr(item, var))))
+    logging.set_level(level)
 
 
 if __name__ == '__main__':
+    level = logging.get_level()
+    logging.set_level(logging.DEBUG)
     import time
     start = time.time()
     query = 'funda'
     items = storage.Storage.search(query, 5)
     end = time.time()
-    print('search results in %d items in %d sec.' % (len(items), end-start))
-    labels, all_items = get_labels(items, query)
+    logging.debug('search results in %d (%s) items in %d sec.' % (len(items), type(items[0]), end-start))
+    labels, all_items = get_labels(len(items), items, query)
     for key, items in labels.items():
-        print('label %s had %d items' % (repr(key.label), len(items)))
-    print('found %d labels for %d items' % (len(labels), len(all_items)))
+        logging.debug('   label %s has %d items' % (repr(key.label), len(items)))
+    logging.debug('found %d labels for %d items' % (len(labels), len(all_items)))
+    logging.set_level(level)

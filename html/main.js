@@ -7,7 +7,7 @@ var TOP_HEIGHT = 250;
 
 var ALPHA_INITIAL = 0.5
 var ALPHA_WARMUP = 0.2
-var ALPHA_SHAKE = 0.5
+var ALPHA_SHAKE = 0.2
 var ALPHA_DRAG = 0.1
 
 function init_tabs() {
@@ -266,15 +266,15 @@ function update_summary(kind, graph) {
         $(".zoom-buttons")
             .css('display', "inline-block");
     }
+    $('#node-count').text('N:' + graph.nodes.length);
 }
 
 function load_graph(kind, w, h) {
     var force = d3.forceSimulation()
-            .force("link", d3.forceLink().id(function(d) { return d.index }))
-            .force("charge", d3.forceManyBody())
-            .force("center", d3.forceCenter(w/3, h/2))
-            .force("x", d3.forceX(0.05))
-            .force("y", d3.forceY(0.05))
+            .force("link", d3.forceLink().distance(10).strength(0.5))
+            .force("x", d3.forceX(w/2).strength(0.1))
+            .force("y", d3.forceY(h/2).strength(0.9))
+            .force("charge", d3.forceManyBody().strength(1))
             .alpha(ALPHA_INITIAL)
             .alphaDecay(0.05);
 
@@ -286,13 +286,14 @@ function load_graph(kind, w, h) {
         .style("cursor", "move")
         .call(zoom);
     var g = svg.append("g");
-    var current_zoom_scale = 0.8;
+    var current_zoom_scale = 0.9;
     zoom.scaleTo(svg, current_zoom_scale);
 
     function zoomed(a, b, c) {
         current_zoom_scale = d3.event.transform.k;
         g.style("stroke-width", 1.5 / d3.event.transform.k + "px");
         g.attr("transform", d3.event.transform);
+        $('#zoom-scale').text('Z:' + current_zoom_scale);
     }
 
     d3.selectAll('#zoom-in-' + kind).on('click', function() {
@@ -310,7 +311,7 @@ function load_graph(kind, w, h) {
 
         update_summary(kind, graph);
 
-        zoom.scaleTo(svg, current_zoom_scale = Math.min(.8, 40/graph.nodes.length));
+        zoom.scaleTo(svg, current_zoom_scale = Math.min(1, Math.min(w,h)/graph.nodes.length/15));
         force.alphaDecay(Math.max(0.05, graph.nodes.length/1000));
 
         svg.insert("rect", ":first-child")
@@ -321,22 +322,18 @@ function load_graph(kind, w, h) {
             .on("click", function() { shake(ALPHA_SHAKE); });
         setCollideRadius();
 
-        var linkedByIndex = {};
-        graph.links.forEach(function(d) {
-            linkedByIndex[d.source + "," + d.target] = true;
-        });
+        var nodeById = {}
+        d3.range(graph.nodes.length).forEach(function(index) { nodeById[index] = graph.nodes[index] });
 
-        function isConnected(a, b) {
-            return linkedByIndex[a.index + "," + b.index] || linkedByIndex[b.index + "," + a.index] || a.index == b.index;
-        }
-
-        function hasConnections(a) {
-            for (var property in linkedByIndex) {
-                s = property.split(",");
-                if ((s[0] == a.index || s[1] == a.index) && linkedByIndex[property]) return true;
+        graph.nodes.forEach(function(d) {
+            d.vx = 3;
+            d.vy = 0.1
+            if (d.fixed) {
+                d.fx = w/2;
+                d.fy = h/2;
+                console.log('fix ' + d.label)
             }
-            return false;
-        }
+        });
 
         function getId(d, type) {
             var label = d.label || '';
@@ -362,6 +359,7 @@ function load_graph(kind, w, h) {
                     .attr("height", function(d) { return d.zoomed_icon_size + 4; })
                 d3.select(selectId(d, 'text'))
                     .text(function(d) {
+                        console.log('"' + d.url + '"');
                         return (d.title || d.label)
                             .replace(/\?.*/, '')
                             .replace(/https+:\/\/[^\/]*\//, '')
@@ -388,7 +386,7 @@ function load_graph(kind, w, h) {
                     .attr("width", function(d) { return d.icon_size; })
                     .attr("height", function(d) { return d.icon_size; })
                 d3.select(selectId(d, 'text'))
-                    .text(function(d) { return d.domain; })
+                    .text(function(d) { return d.label; })
                     .transition()
                     .attr("y", function(d) { return d.font_size + d.icon_size/2; })
                     .style("font-size", function(d) { return d.font_size + 'px'; });
@@ -564,7 +562,7 @@ function launch(kind, label, url, path) {
             break
         case "browser":
         case "google":
-            document.location = (url.indexOf('#') == -1) ? url + '##' + query : url;
+            document.location = url;
             break;
         case "file":
         case "gmail":
