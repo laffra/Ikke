@@ -221,12 +221,17 @@ class Storage:
 
     @classmethod
     def get_history(cls, kind):
+        handler = import_module('importers.%s' % kind)
+        return handler.history()
+
+    @classmethod
+    def can_load_more(cls, kind):
         try:
             handler = import_module('importers.%s' % kind)
-            return handler.history()
+            return handler.can_load_more()
         except Exception as e:
-            logging.error('No history for %s: %s' % (kind, e))
-            return ''
+            logging.debug('Cannot see if can load more: %s %s' % (kind, e))
+            return False
 
     @classmethod
     def to_item(cls, obj, path):
@@ -270,21 +275,36 @@ class Storage:
     @classmethod
     def get_item_count(cls, kind):
         path = os.path.join(HOME_DIR, 'items', kind)
-        return len(os.listdir(path)) if os.path.isdir(path) else 0
+        count = sum(len(files) for _,_,files in os.walk(path))
+        return count
 
     @classmethod
     def load(cls, kind):
         try:
             import_module('importers.%s' % kind).load()
         except Exception as e:
-            logging.error('Could not load %s: %s' % (kind, e))
+            logging.debug('Could not load %s: %s' % (kind, e))
 
     @classmethod
     def stop_loading(cls, kind):
         try:
             import_module('importers.%s' % kind).stop_loading()
         except Exception as e:
-            logging.error('Could not stop loading %s: %s' % (kind, e))
+            logging.debug('Could not stop loading %s: %s' % (kind, e))
+
+    @classmethod
+    def is_loading(cls, kind):
+        try:
+            return import_module('importers.%s' % kind).is_loading()
+        except Exception as e:
+            logging.debug('Could not check if %s is loading: %s' % (kind, e))
+
+    @classmethod
+    def delete_all(cls, kind):
+        try:
+            return import_module('importers.%s' % kind).delete_all()
+        except Exception as e:
+            logging.error('Could not stop delete all %s: %s' % (kind, e))
 
     @classmethod
     def clear(cls, kind):
@@ -371,15 +391,6 @@ class File(Data):
                 self.words = item.words
 
 
-def delete_all(kind):
-    # type (str) -> None
-    logging.set_level(min(logging.LOG_LEVEL, logging.WARNING))
-    path = Storage.get_local_path(kind)
-    for n in range(10):
-        logging.warning('Deleting all of %s in %d seconds' % (path, 10-n))
-        time.sleep(1)
-    shutil.rmtree(path)
-
 Storage.setup()
 
 if __name__ == '__main__':
@@ -391,12 +402,16 @@ if __name__ == '__main__':
                 logging.debug('%s=%s' % (k,v))
         logging.debug()
 
-    if True:
+    if False:
         for result in Storage.search('Marc sent you ', days=21):
             logging.debug(logging.LINE)
             for k,v in result.items():
                 logging.debug('%s:  %s' % (k, v))
         logging.debug()
+
+    if True:
+        for kind in ['browser','file','gmail','contact']:
+            logging.debug('%s: %d' % (kind, Storage.get_item_count(kind)))
 
     if False:
         for k,v in Storage.search_contact('messaging-digest-noreply@linkedin.com').items():

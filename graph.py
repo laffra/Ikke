@@ -50,7 +50,7 @@ class Graph:
         self.search_results[kind] = set(self.search_results[kind] + list(items))
         self.search_count[kind] = count
         self.search_duration[kind].append(duration)
-        logging.info('found %d %s items' % (len(items), kind))
+        logging.debug('found %d %s items' % (len(items), kind))
 
     def search(self, timestamp):
         start_time = time.time()

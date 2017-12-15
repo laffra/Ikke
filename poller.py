@@ -30,6 +30,7 @@ class Worker(threading.Thread):
         if self.running:
             try:
                 self.importer.poll()
+                logging.info('Polling %s' % self.importer.__name__)
             except Exception as e:
                 logging.error('POLLER: Error polling ', self.importer.__name__, e)
 

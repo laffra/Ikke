@@ -51,7 +51,7 @@ CLEANUP_URL_PATH_RE = re.compile('\W+')
 MAX_FILENAME_LENGTH = 75
 
 chrome_epoch = datetime.datetime(1601,1,1)
-loading_items = False
+is_loading_items = False
 
 
 def get_history_path():
@@ -70,13 +70,13 @@ def adjust_chrome_timestamp(chrome_timestamp):
 
 
 def process_url(rows):
-    for n,row in enumerate(rows):
-        settings['browser/added'] = settings['browser/added'] + 1
-        visit_count, last_visit_time, title, url = row
-        if n % 1000 == 0:
-            logging.debug('Add %s %s' % (title, url))
-        if title:
-            track(url, title, '', get_favicon(url), '', adjust_chrome_timestamp(last_visit_time), force=True)
+    if rows:
+        for n,row in enumerate(rows):
+            visit_count, last_visit_time, title, url = row
+            if n % 1000 == 0:
+                logging.debug('Add %s %s' % (title, url))
+            if title:
+                track(url, title, '', get_favicon(url), '', adjust_chrome_timestamp(last_visit_time), force=True)
 
 
 def get_favicon(url):
@@ -92,12 +92,11 @@ def track(url, title, image, favicon, selection, timestamp=0, force=False):
     if len(filename) > MAX_FILENAME_LENGTH:
         filename = filename[:MAX_FILENAME_LENGTH/2] + '+++' + filename[-MAX_FILENAME_LENGTH/2:]
     uid = os.path.join(domain, filename)
-    if is_meta_site(url):
-        return
-    if not force and not image and not selection:
+    if not force and (is_meta_site(url) or not image and not selection):
         return
 
     logging.debug('Track %s %s' % (url, image))
+    settings.increment('browser/added', 1)
     Storage.add_data({
         'kind': 'browser',
         'uid': uid,
@@ -127,39 +126,56 @@ def load_history():
     logging.info('Loading browser history')
     settings['browser/added'] = 0
     settings['browser/when'] = time.time()
-    rows = cursor.fetchall()
+    seen = set()
+    rows = []
+    for row in cursor.fetchall():
+        url = row[-1]
+        if not is_meta_site(url) and not url in seen:
+            rows.append(row)
+        seen.add(url)
     chunk_size = 2 * int(len(rows) / thread_count)
     for n in range(thread_count + 1):
         start, end = n*chunk_size, (n+1)*chunk_size
         pool.add_task(process_url, rows[start: end])
+    count = settings['browser/added']
     pool.wait_completion()
-    logging.info('%d urls added with %d threads with chunksize %d.' % (len(rows), thread_count, chunk_size))
+    logging.info('%d urls added with %d threads with chunksize %d.' % (count, thread_count, chunk_size))
+    logging.info(history())
 
 
 def history():
-    msg = 'Browser history not yet loaded.'
-    count = settings.get('browser/added', 0)
+    count = Storage.get_item_count('browser')
     if count > 0:
         timestamp = settings.get('browser/when', 0)
         when = datetime.datetime.fromtimestamp(timestamp).date()
-        msg = 'Loaded %d sites from your browser history on %s' % (count, when)
-        if loading_items:
-            msg += '. Loading more items...'
-    return msg
+        return '%d sites loaded from your browser history on %s' % (count, when)
+    return 'Nothing loaded yet.'
+
+
+def can_load_more():
+    return True
+
+
+def delete_all():
+    return storage.Storage.clear('browser')
 
 
 def load():
-    global loading_items
-    loading_items = True
+    global is_loading_items
+    is_loading_items = True
     try:
         load_history()
     finally:
-        loading_items = False
+        is_loading_items = False
 
 
 def stop_loading():
-    global loading_items
-    loading_items = False
+    global is_loading_items
+    is_loading_items = False
+
+
+def is_loading():
+    return is_loading_items
 
 
 class BrowserItem(storage.Data):

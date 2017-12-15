@@ -61,8 +61,8 @@ def remove_duplicates(count, items, keep_duplicates):
     duplicates = set()
     items = sorted(items, key=lambda item: item.image)
     results = [item for item in items if keep_duplicates or not item.is_duplicate(duplicates)]
-    if count > storage.MAX_NUMBER_OF_ITEMS:
-        too_much = TooMuch(count - storage.MAX_NUMBER_OF_ITEMS)
+    if len(results) > storage.MAX_NUMBER_OF_ITEMS:
+        too_much = TooMuch(len(results) - storage.MAX_NUMBER_OF_ITEMS)
         results = results[:storage.MAX_NUMBER_OF_ITEMS]
         results.append(too_much)
     return results

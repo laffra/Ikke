@@ -1,21 +1,31 @@
 
-.setting button {
+button {
     background: lightgreen;
     border: 1px solid grey;
     padding: 5px;
     cursor: pointer;
     display: inline;
+    width: 100px;
+    text-align: center;
+    font-weight: bold;
+    height: 24px;
+    float: left
 }
 
-.setting button.loading {
+button.loading {
     background: pink;
 }
 
-.setting button:focus {
+button:focus {
     outline: none;
 }
 
-.setting button:disabled {
+button:hover {
+    border: 3px solid blue;
+    padding: 1px;
+}
+
+button:disabled {
     background: pink;
 }
 
@@ -23,15 +33,36 @@
     opacity: 0;
 }
 
-.setting span,a {
+table {
+    border-collapse: collapse;
+}
+
+tr:nth-child(even) {
+    background-color: #f2f2f2;
+}
+
+th, td {
+    text-align: left;
+    padding: 8px;
+}
+
+th {
+    background-color: #4CAF50;
+    color: white;
+}
+
+span,a {
     font-size: 12px;
-    margin: 4px;
+}
+
+span.name {
+    font-size: 14px;
+    text-align: right;
 }
 
 .spinner {
     visibility: hidden;
-    top: 11px;
     width: 32px;
     height: 32px;
-    position: relative;
+    float: left
 }

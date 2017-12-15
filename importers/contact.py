@@ -83,6 +83,13 @@ class Contact(storage.Data):
         obj['names'] = list(set(obj['names'] + self.names))
         obj['phones'] = list(set(obj['phones'] + self.phones))
 
+    def is_duplicate(self, duplicates):
+        if self.email in duplicates:
+            return True
+        duplicates.add(self.email)
+        logging.info('Unique contact: %s - %s' % (self.name, self.email))
+        return False
+
     def __hash__(self):
         return hash(self.uid)
 
@@ -93,12 +100,24 @@ class Contact(storage.Data):
 deserialize = Contact.deserialize
 
 
+def delete_all():
+    return storage.Storage.clear('contact')
+
+
+def can_load_more():
+    return False
+
+
 def poll():
     pass
 
 
 def history():
-    return 'Contacts are loaded as senders/receivers for gmail messages'
+    msg = 'Nothing loaded yet.'
+    count = storage.Storage.get_item_count('contact')
+    if count > 0:
+        msg = '%d contacts were loaded as senders/receivers for gmail messages' % count
+    return msg
 
 
 def cleanup():

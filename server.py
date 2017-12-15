@@ -55,6 +55,7 @@ class Server(BaseHTTPRequestHandler):
             '/jquery.js': self.get_jquery,
             '/search': self.search,
             '/graph': self.get_graph,
+            '/poll': self.poll,
         }
         self.parse_args()
         routes.get(self.path, self.get_file)()
@@ -78,8 +79,7 @@ class Server(BaseHTTPRequestHandler):
         html = self.jinja2_env.get_template('settings.html').render({
             'location': os.path.dirname(os.path.realpath(__file__)),
             'kinds': graph.ALL_ITEM_KINDS[1:],
-            'counts': { kind: Storage.get_item_count(kind) for kind in graph.ALL_ITEM_KINDS[1:] },
-            'history': { kind: Storage.get_history(kind) for kind in graph.ALL_ITEM_KINDS[1:] },
+            'can_load_more': { kind: Storage.can_load_more(kind) for kind in graph.ALL_ITEM_KINDS[1:]},
             'gmail_needed': 'gu' not in settings,
         })
         self.respond(html)
@@ -112,11 +112,21 @@ class Server(BaseHTTPRequestHandler):
         self.respond(html)
 
     def clear(self):
-        if True or Storage.clear(self.args.get('kind', '')):
+        kind = self.args.get('kind', '')
+        logging.info('Clearing all history for %s' % kind)
+        if Storage.delete_all(kind):
             self.respond('OK')
 
     def history(self):
-        self.respond(Storage.get_history(self.args.get('kind', '')))
+        kind = self.args.get('kind', '')
+        try:
+            self.respond(json.dumps({
+                'is_loading': Storage.is_loading(kind),
+                'history': Storage.get_history(kind)
+            }), content_type='application/json')
+        except Exception as e:
+            logging.debug('No history for %s' % kind)
+
 
     def search(self):
         query = self.args.get('q', '')
@@ -133,6 +143,9 @@ class Server(BaseHTTPRequestHandler):
     def load(self):
         Storage.load(self.args['kind'])
         self.respond('OK')
+
+    def poll(self):
+        poller.poll()
 
     def get_graph(self):
         query = self.args.get('q')
@@ -228,10 +241,10 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
 
 
 if __name__ == '__main__':
-    poller.start()
     threaded_server = ThreadedHTTPServer(SERVER_ADDRESS, Server)
     webbrowser.open(MAIN_URL, autoraise=False)
+    poller.start()
     try:
         threaded_server.serve_forever()
-    except KeyboardInterrupt:
+    finally:
         poller.stop()

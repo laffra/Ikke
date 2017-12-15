@@ -49,6 +49,10 @@ class Download:
         return datetime.datetime.fromtimestamp(timestamp).date()
 
 
+def can_load_more():
+    return True
+
+
 load = Download.load
 poll = Download.load
 history = Download.history

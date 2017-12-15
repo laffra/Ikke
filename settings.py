@@ -1,6 +1,8 @@
-import os
-import storage
 import json
+import os
+import logging
+import storage
+import threading
 
 
 SETTINGS_PATH = os.path.join(storage.HOME_DIR, 'settings.json')
@@ -9,9 +11,14 @@ SETTINGS_PATH = os.path.join(storage.HOME_DIR, 'settings.json')
 class Settings(dict):
     def __init__(self, path, *args, **kwds):
         self.path = path
+        self.lock = threading.Lock()
+
         if os.path.exists(self.path):
             with open(path, 'r') as f:
-                self.update(json.load(f))
+                try:
+                    self.update(json.load(f))
+                except:
+                    logging.error('could not load settings.')
         dict.__init__(self, *args, **kwds)
 
     def __setitem__(self, key, value):
@@ -19,8 +26,13 @@ class Settings(dict):
         self.save()
 
     def clear(self):
-        dict.clear(self)
-        self.save()
+        with self.lock:
+            dict.clear(self)
+            self.save()
+
+    def increment(self, key, value):
+        with self.lock:
+            self[key] = self[key] + value
 
     def save(self):
         with open(self.path, 'w') as f:

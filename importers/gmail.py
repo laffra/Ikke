@@ -12,7 +12,6 @@ import os
 import re
 import stopwords
 import storage
-from threadpool import ThreadPool
 import time
 import traceback
 
@@ -28,6 +27,7 @@ MAXIMUM_THREAD_COUNT = 15
 URL_MATCH_RE = re.compile('href=[\'"]((https?):((//)|(\\\\))+([\w\d:#@%/;$()~_?\+-=\\\.&](#!)?)*)')
 DATESTRING_RE = re.compile(' [-+].*')
 
+UTF8_MARKERS_RE = re.compile('=\?utf-8\?.\?|\?=')
 
 PATH_ATTRIBUTES = {
     'kind',
@@ -44,7 +44,7 @@ PATH_ATTRIBUTES = {
 }
 
 class GMail():
-    loading_items = False
+    is_loading_items = False
     singleton = None
     messages_loaded = 0
 
@@ -132,24 +132,36 @@ class GMail():
 
     @classmethod
     def load_messages(cls, count, start=0):
-        day = start
-        reader = None
-        while cls.loading_items and day < count:
-            try:
-                if reader is None:
-                    reader = GMail()
-                with reader:
-                    inbox = reader.process_messages_for_day(reader.inbox, day)
-                    sent = reader.process_messages_for_day(reader.sent, day)
-                    contact.cleanup()
-                    logging.info('Processed %d inbox and %d sent messages for day %d' % (inbox or 0, sent or 0, day))
-                    logging.info(cls.history())
-            except Exception as e:
-                logging.error('Cannot load message for day %d: %s' % (day, e))
-                reader = None
-            else:
-                settings['gc'] = max(day, settings.get('gc', 0))
-                day += 1
+        if cls.is_loading_items:
+            logging.info('Already loading items, skip request for %d-%d' % (start, count))
+            return
+        cls.is_loading_items = True
+        try:
+            logging.info('Loading gmail for the last %s days - %s days back' % (count, start))
+            cls.messages_loaded = 0
+            day = start
+            reader = None
+            while cls.is_loading_items and day < count:
+                try:
+                    if reader is None:
+                        reader = GMail()
+                    with reader:
+                        inbox = reader.process_messages_for_day(reader.inbox, day)
+                        sent = reader.process_messages_for_day(reader.sent, day)
+                        contact.cleanup()
+                        logging.info('Processed %d inbox and %d sent messages for day %d' % (inbox or 0, sent or 0, day))
+                        logging.info(cls.history())
+                except Exception as e:
+                    logging.error('Cannot load message for day %d: %s' % (day, e))
+                    reader = None
+                else:
+                    settings['gmail/days'] = max(day, settings.get('gmail/days', 0))
+                    day += 1
+        finally:
+            contact.cleanup()
+            storage.Storage.log_search_stats()
+            logging.info('Loaded %d messages in total' % cls.messages_loaded)
+            cls.is_loading_items = False
 
     def process_messages_for_day(self, connection, day):
         query = '(since "%s" before "%s")' % (self.get_day_string_internal(day), self.get_day_string_internal(day - 1))
@@ -189,7 +201,7 @@ class GMail():
             raise Exception(result)
 
     def parse_utf8(self, s):
-        return s.replace('=?utf-8?q?', '').replace('?=', '')
+        return re.sub(UTF8_MARKERS_RE, '', s).replace('=20', ' ')
 
     def get_addresses(self, persons_string, timestamp):
         return [
@@ -257,28 +269,20 @@ class GMail():
 
     @classmethod
     def history(cls):
-        days = settings.get('gc', 0) + 1
-        date = str((datetime.datetime.now() - datetime.timedelta(days=days)).date())
-        history = 'Gmail messages loaded %s days back to %s' % (days, date)
-        if cls.loading_items:
-            history += '. Loading more items...'
-        return history
+        count = storage.Storage.get_item_count('gmail')
+        if count > 0:
+            days = settings.get('gmail/days', 0) + 1
+            date = str((datetime.datetime.now() - datetime.timedelta(days=days)).date())
+            return '%d gmail messages loaded up to %s days back to %s' % (count, days, date)
+        return 'Nothing loaded yet.'
 
     @classmethod
-    def load(cls, days_count=1, days_start=0, force=False):
+    def load(cls, days_count=1, days_start=0):
         # type (int,bool) -> None
-        logging.info('Loading gmail for the last %s - %s days' % (days_start, days_count))
-        cls.messages_loaded = 0
-        if force:
-            settings['gl'] = time.time()
-        elif not settings.get('gl', 0):
+        if 'gl' not in settings:  # this is the very first load
             days_count = MAXIMUM_DAYS_LOAD
         settings['gl'] = time.time()
-
         cls.load_messages(days_count, days_start)
-        contact.cleanup()
-        logging.info('Loaded %d messages in total' % cls.messages_loaded)
-        storage.Storage.log_search_stats()
         storage.Storage.stats.clear()
 
 
@@ -333,16 +337,32 @@ class GMailNode(storage.Data):
         return '<script>document.location=\'%s\';</script>' % url
 
 
+def can_load_more():
+    return True
+
+
+def delete_all():
+    if storage.Storage.clear('gmail'):
+        settings['gmail/days'] = 0
+
+
 def load():
-    days = settings.get('gc', 0)
-    GMail.loading_items = True
+    days = settings.get('gmail/days', 0)
     GMail.load(days + 3650, days)
 
 
 def stop_loading():
-    GMail.loading_items = False
+    GMail.is_loading_items = False
 
-poll = GMail.load
+
+def is_loading():
+    return GMail.is_loading_items
+
+
+def poll():
+    GMail.load(1, 0)
+
+
 history = GMail.history
 
 deserialize = GMailNode.deserialize
@@ -357,7 +377,6 @@ if __name__ == '__main__':
     # settings.clear()
     # load(1, 0, True)
     # load(3650, 0, True)
-    settings['gc'] = 365
     GMail.load(1, 0, True)
-    logging.info('History: %s' % history())
+    # logging.info('History: %s' % history())
     # poll()

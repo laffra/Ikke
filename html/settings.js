@@ -7,25 +7,28 @@ function setup_gmail() {
 function check_history() {
     $('.history').each(function() {
         var span = $(this);
-        var kind = span.parent().attr('kind');
-        if (span.text()) {
-            $.get('/history?kind=' + kind, function(history) {
-                span.text(history);
-                var button = $('#load-button-' + kind);
-                if (history.indexOf('Loading more items') != -1) {
-                    button.addClass('loading');
-                    button.text('Stop loading');
-                    $('#spinner-' + kind).css('visibility', 'visible');
-                } else {
-                    button.removeClass('loading');
-                    button.text('Load more items');
-                    $('#spinner-' + kind).css('visibility', 'hidden');
-                }
-            })
-            .fail(function() {
-                span.text('Error getting history for ' + kind);
-            })
-        }
+        var kind = span.closest('tr').attr('kind');
+        var load_button = $('#load-button-' + kind);
+        var clear_button = $('#clear-button-' + kind);
+        var spinner = $('#spinner-' + kind);
+        $.getJSON('/history?kind=' + kind, function(response) {
+            span.text(response.history);
+            if (response.is_loading) {
+                load_button.addClass('loading');
+                load_button.text('Stop loading');
+                spinner.css('visibility', 'visible');
+            } else {
+                load_button.removeClass('loading');
+                load_button.text('Load more items');
+                spinner.css('visibility', 'hidden');
+                clear_button.attr('disabled', false);
+            }
+        })
+        .fail(function() {
+            span.text('No history for ' + kind);
+            spinner.css('visibility', 'hidden');
+            clear_button.remove();
+        })
     })
 }
 
@@ -33,29 +36,25 @@ setInterval(check_history, 3000);
 check_history();
 
 $('.clear-button').click(function() {
-    var button = $(this);
-    var kind = button.parent().attr('kind');
-    $('#spinner-' + kind).css('visibility', 'visible');
-    button.attr('disabled', true);
+    var clear_button = $(this);
+    var kind = clear_button.closest('tr').attr('kind');
+    var spinner = $('#spinner-' + kind);
+    var history = $('#history-' + kind);
+    spinner.css('visibility', 'visible');
+    clear_button.attr('disabled', true);
     $.get('/clear?kind=' + kind, function() {
-            var li = button.closest('li');
-            button.animate({ fontSize: 0 }, 500);
-            li.animate({ height: 0 }, 500, function() { li.empty().remove() });
         })
         .fail(function(error) {
-            $('#history-' + kind).text('Error clearing ' + kind);
+            history.text('Error clearing ' + kind);
         })
         .done(function(error) {
-            $('#spinner-' + kind).css('visibility', 'hidden');
-            if (kind == 'all') {
-                $('.clear-button').attr('disabled', true);
-            }
+            spinner.css('visibility', 'hidden');
         });
 });
 
 $('.load-button').click(function() {
     var button = $(this);
-    var kind = button.parent().attr('kind');
+    var kind = button.closest('tr').attr('kind');
     $('#spinner-' + kind).css('visibility', 'visible');
     if (button.text() === 'Load more items') {
         $.get('/load?kind=' + kind)

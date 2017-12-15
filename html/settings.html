@@ -18,22 +18,44 @@
 </div>
 {% else %}
 <div id="ikke-settings">
-    <ul>
+    <table>
+        <tr>
+            <th>Kind</th>
+            <th>Status</th>
+            <th>Cleanup</th>
+            <th>Add more</th>
+            <th></th>
+        </tr>
     {% for kind in kinds %}
-        {% if counts[kind] %}
-        <li>
-            <span class="setting" kind='{{kind}}'>
-                <button class='clear-button'>
-                    Delete {{ counts[kind] }} {{ kind }} item{{ '' if counts[kind] == 1 else 's' }}
+        <tr class="setting" kind='{{kind}}'>
+            <td>
+                <span class="name">{{kind.upper()}}</span>
+            </td>
+            <td>
+                <span class="history"><i>calculating...</i></span>
+            </td>
+            <td>
+                <button class='clear-button' id="clear-button-{{kind}}">
+                    Delete all items
                 </button>
-                <button class="load-button" id="load-button-{{kind}}">Load more items</button>
-                <span class="history">{{ history[kind] }}</span>
-                <img id="spinner-{{kind}}" src="get?path=icons/loading_spinner.gif" class="spinner">
-            </span>
-        </li>
-        {% endif %}
+            </td>
+            <td>
+                {% if can_load_more[kind] %}
+                    <button class="load-button" id="load-button-{{kind}}">Load more items</button>
+                {% else %}
+                    &nbsp;
+                {% endif %}
+            </td>
+            <td>
+                {% if can_load_more[kind] %}
+                    <img id="spinner-{{kind}}" src="get?path=icons/loading_spinner.gif" class="spinner">
+                {% else %}
+                    &nbsp;
+                {% endif %}
+            </td>
+        </tr>
     {% endfor %}
-    </ul>
+    </table>
 </div>
 {% endif %}
 
