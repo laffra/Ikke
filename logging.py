@@ -1,3 +1,4 @@
+import datetime
 import inspect
 import os
 
@@ -18,30 +19,31 @@ def log_impl(msg):
     print(msg)
 
 
-def log(level, msg):
+def log(level, *msg):
     # type(int, str) -> None
     if level <= LOG_LEVEL:
-        log_impl('%s %s: %s' % (caller_info(), KINDS[level], msg))
+        when = datetime.datetime.now().strftime('%H:%M:%S')
+        log_impl('%s %s %s: %s' % (caller_info(), when, KINDS[level], ' '.join(map(str,msg))))
 
 
-def warning(msg=''):
+def warning(*msg):
     # type(str) -> None
-    log(WARNING, msg)
+    log(WARNING, *msg)
 
 
-def error(msg=''):
+def error(*msg):
     # type(str) -> None
-    log(ERROR, msg)
+    log(ERROR, *msg)
 
 
-def info(msg=''):
+def info(*msg):
     # type(str) -> None
-    log(INFO, msg)
+    log(INFO, *msg)
 
 
-def debug(msg=''):
+def debug(*msg):
     # type(str) -> None
-    log(DEBUG, msg)
+    log(DEBUG, *msg)
 
 
 def caller_info(skip=3):
@@ -69,6 +71,7 @@ if __name__ == '__main__':
 
     set_level(INFO)
     info('Report end-user level events.')
+    info('Arg1', 'Arg2', 'Arg3', 1, 2, 3, True, '- Just some multiple args')
 
     set_level(ERROR)
     error('Something seriously wrong happened, execution probably ends now.')

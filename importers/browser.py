@@ -7,15 +7,9 @@ from settings import settings
 import shutil
 import sqlite3
 from storage import Storage
-import sys
 import time
 import utils
-
-if sys.version_info >= (3,):
-    import urllib.parse as urlparse
-else:
-    from urlparse import urlparse
-
+from urllib.parse import urlparse
 import stopwords
 import storage
 from threadpool import ThreadPool
@@ -48,7 +42,8 @@ META_DOMAINS = {
 }
 META_DOMAINS_RE = re.compile('|'.join(META_DOMAINS))
 CLEANUP_URL_PATH_RE = re.compile('\W+')
-MAX_FILENAME_LENGTH = 75
+MAX_FILENAME_LENGTH = 76
+MAX_FILENAME_FRACTION = 35
 
 chrome_epoch = datetime.datetime(1601,1,1)
 is_loading_items = False
@@ -90,7 +85,7 @@ def track(url, title, image, favicon, selection, timestamp=0, force=False):
     domain = parsed_url.netloc
     filename = re.sub(CLEANUP_URL_PATH_RE, '+', parsed_url.path[1:])
     if len(filename) > MAX_FILENAME_LENGTH:
-        filename = filename[:MAX_FILENAME_LENGTH/2] + '+++' + filename[-MAX_FILENAME_LENGTH/2:]
+        filename = filename[:MAX_FILENAME_FRACTION] + '+++' + filename[-MAX_FILENAME_FRACTION:]
     uid = os.path.join(domain, filename)
     if not force and (is_meta_site(url) or not image and not selection):
         return

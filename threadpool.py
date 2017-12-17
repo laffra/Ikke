@@ -1,10 +1,4 @@
-
-import sys
-if sys.version_info >= (3,):
-    from queue import Queue
-else:
-    from Queue import Queue
-
+from queue import Queue
 from threading import Thread
 import traceback
 

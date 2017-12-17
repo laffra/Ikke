@@ -14,17 +14,12 @@ import stopwords
 import storage
 import time
 import traceback
-
-import sys
-if sys.version_info >= (3,):
-    import urllib.parse as urlparse
-else:
-    from urlparse import urlparse
+from urllib.parse import urlparse
 
 
 MAXIMUM_DAYS_LOAD = 3650
 MAXIMUM_THREAD_COUNT = 15
-URL_MATCH_RE = re.compile('href=[\'"]((https?):((//)|(\\\\))+([\w\d:#@%/;$()~_?\+-=\\\.&](#!)?)*)')
+URL_MATCH_RE = re.compile('https?://[\w\d:#@%/;$()~_?\+-=\.&]*')
 DATESTRING_RE = re.compile(' [-+].*')
 
 UTF8_MARKERS_RE = re.compile('=\?utf-8\?.\?|\?=')
@@ -82,24 +77,8 @@ class GMail():
         self.close_connections()
 
     @classmethod
-    def save_urls(cls, body, title, words, timestamp):
-        for url in set(match[0] for match in re.findall(URL_MATCH_RE, body)):
-            domain = urlparse(url).netloc
-            storage.Storage.add_data({
-                'kind': 'browser',
-                'title': title,
-                'label': domain,
-                'domain': domain,
-                'image': '',
-                'timestamp': timestamp,
-                'url': url,
-                'uid': url,
-                'words': words,
-            })
-
-    @classmethod
-    def save_attachments(cls, msg, description, timestamp):
-        count = 0
+    def save_attachments(cls, msg, timestamp):
+        files = []
         for part in msg.walk():
             if part.get_content_maintype() == 'multipart':
                 continue
@@ -108,27 +87,38 @@ class GMail():
                 continue
             filename = part.get_filename()
             body = part.get_payload(decode=True)
+            path = os.path.join(msg['Message-ID'], filename)
             if filename and body:
                 storage.Storage.add_binary_data(
                     body,
                     {
-                        'uid': os.path.join(msg['Message-ID'], filename),
+                        'uid': path,
                         'kind': 'file',
                         'timestamp': timestamp,
                     })
-                count += 1
-        return count
+                files.append(path)
+                logging.debug('  ', path)
+        return files
 
     @classmethod
     def get_body(cls, msg):
         for part in msg.walk():
-            if part.get_content_type() == 'text/html':
-                html = part.get_payload(decode=True).decode(errors='ignore')
-                return part.get_content_type(), htmlparser.get_text(html)
-        for part in msg.walk():
-            if part.get_content_maintype() == 'text/plain':
-                return part.get_content_type(), part.get_payload(decode=True).decode(errors='ignore')
-        return '', ''
+            content_type = part.get_content_type()
+            if content_type in ['text/plain', 'text/html']:
+                body = part.get_payload(decode=True).decode('utf8', errors='ignore')
+                url_domains = cls.get_top_domain_urls(body)
+                if content_type == 'text/html':
+                    body = htmlparser.get_text(body)
+                return content_type, url_domains, body
+        return '', [], ''
+
+    @classmethod
+    def get_top_domain_urls(cls, body):
+        return list(set(map(cls.get_top_domain, re.findall(URL_MATCH_RE, body))))
+
+    @classmethod
+    def get_top_domain(cls, url):
+        return '.'.join(urlparse(url).netloc.split('.')[-2:])
 
     @classmethod
     def load_messages(cls, count, start=0):
@@ -150,9 +140,11 @@ class GMail():
                         sent = reader.process_messages_for_day(reader.sent, day)
                         contact.cleanup()
                         logging.info('Processed %d inbox and %d sent messages for day %d' % (inbox or 0, sent or 0, day))
-                        logging.info(cls.history())
+                        logging.debug(cls.history())
                 except Exception as e:
                     logging.error('Cannot load message for day %d: %s' % (day, e))
+                    import traceback
+                    traceback.print_exc()
                     reader = None
                 else:
                     settings['gmail/days'] = max(day, settings.get('gmail/days', 0))
@@ -188,44 +180,50 @@ class GMail():
         logging.debug('Parsing %d message ids' % len(message_ids))
         result, responses = connection.uid('fetch', ','.join(message_ids), '(RFC822)')
         if result == 'OK':
-            responses = filter(lambda response: len(response) > 1, responses)
+            responses = list(filter(lambda response: len(response) > 1, responses))
             for response in responses:
                 try:
-                    self.parse_message(response)
-                    GMail.messages_loaded += 1
+                    self.parse_message(part.decode('utf8', errors='ignore') for part in response)
                 except Exception as e:
                     logging.error('Cannot handle response due to %s' % e)
+                    logging.error('Response:', response)
                     traceback.print_exc()
+                else:
+                    GMail.messages_loaded += 1
             return len(responses)
         else:
             raise Exception(result)
 
-    def parse_utf8(self, s):
-        return re.sub(UTF8_MARKERS_RE, '', s).replace('=20', ' ')
+    def decode_header(self, s):
+        try:
+            text, encoding = email.header.decode_header(s)[0]
+            return text.decode('utf8', errors='ignore')
+        except:
+            return s
 
     def get_addresses(self, persons_string, timestamp):
         return [
-            contact.find_contact(email_address.lower(), self.parse_utf8(name), timestamp=timestamp)['email']
+            contact.find_contact(email_address.lower(), self.decode_header(name), timestamp=timestamp)['email']
             for name, email_address in email.utils.getaddresses(persons_string)
             if email_address
         ]
 
     def parse_message(self, response):
         uid, data = response
-        try:
-            msg = email.message_from_bytes(data)
-        except:
-            msg = email.message_from_string(data)
-        msg['uid'] = uid.decode()
-        subject = str(email.header.make_header(email.header.decode_header(msg['Subject'].encode('utf8'))))
+        msg = email.message_from_string(data)
+        msg['uid'] = uid
+        subject = self.decode_header(msg['Subject'])
         timestamp = self.get_timestamp(msg.get('Received', msg.get('Date')).split(';')[-1].strip())
-        content_type, body = self.get_body(msg)
+        content_type, url_domains, body = self.get_body(msg)
+        logging.debug('parsing message', type(subject), type(body))
         label, words, body = self.parse_email_text(subject, body)
         senders = self.get_addresses(msg.get_all('From', []), timestamp)
         receivers = self.get_addresses(msg.get_all('To', []), timestamp)
         ccs = self.get_addresses(msg.get_all('Cc', []), timestamp)
         emails = sorted(list(set(receivers + ccs + senders)))
         thread = '%s - %s' % (label, emails)
+        logging.debug('Attachments for "%s":' % label)
+        files = self.save_attachments(msg, timestamp)
         storage.Storage.add_data({
             'uid': msg['uid'] or msg['Message-ID'],
             'message_id': msg['Message-ID'],
@@ -240,21 +238,19 @@ class GMail():
             'content_type': content_type,
             'kind': 'gmail',
             'timestamp': timestamp,
+            'url_domains': url_domains,
+            'files': files,
         })
-        self.save_attachments(msg, subject, timestamp)
-        self.save_urls(body, subject, words, timestamp)
         logging.debug('Add message "%s"' % subject)
 
     @classmethod
     def parse_email_text(cls, subject, body):
         subject_words = stopwords.remove_stopwords(subject)
         label = ' '.join(subject_words)
-        body_words = [word.encode('utf8').lower() for word in stopwords.remove_stopwords(body)]
+        body_words = [word.lower() for word in stopwords.remove_stopwords(body)]
         top_body_words = [word for word,count in Counter(body_words).most_common(10)]
         words = list(set(subject_words + top_body_words))
         rest = ' '.join(set(body_words) - set(words))
-        if len(label) > 31:
-            label = label[:13] + ' ... ' + label[-13:]
         logging.debug('subj: "%s"' % subject_words)
         logging.debug('body: "%s"' % body_words)
         logging.debug('all: "%s"' % words)
@@ -308,10 +304,23 @@ class GMailNode(storage.Data):
         self.zoomed_icon_size = 24
         self.thread = obj['thread']
         self.node_size = 1
+        self.url_domains = obj['url_domains']
+        self.files = obj['files']
         dict.update(self, vars(self))
 
     def __hash__(self):
         return hash(self.uid)
+
+    def is_related_item(self, other):
+        if self.url_domains and other.kind == 'browser':
+            return GMail.get_top_domain(other.url) in self.url_domains
+        if self.files and other.kind == 'file':
+            return other.path[len(storage.FILE_DIR)+1:] in self.files
+        if self.persons and other.kind == 'contact':
+            return other in self.persons
+
+    def get_related_items(self):
+        return [storage.Storage.load_item('file', path) for path in self.files] + self.persons
 
     def __eq__(self, other):
         if isinstance(other, self.__class__):
@@ -372,11 +381,12 @@ render = GMailNode.render
 def cleanup():
     pass
 
-
 if __name__ == '__main__':
+    logging.set_level(logging.INFO)
     # settings.clear()
     # load(1, 0, True)
     # load(3650, 0, True)
-    GMail.load(1, 0, True)
+    GMail.load(4, 3)
     # logging.info('History: %s' % history())
     # poll()
+

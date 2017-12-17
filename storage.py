@@ -10,23 +10,13 @@ import stat
 import stopwords
 import subprocess
 import time
-
-import sys
-if sys.version_info >= (3,):
-    from urllib.parse import quote
-else:
-    JSONDecodeError = ValueError
-    def quote(s,safe=''):
-        return s.replace('/', '%2F')
-    from urllib import url2pathname
-    def unquote(s): return url2pathname(s)
-
 from collections import defaultdict
 
 HOME_DIR = os.path.join(os.path.expanduser('~'), 'IKKE')
 HOME_DIR_SEGMENT_COUNT = len(HOME_DIR.split(os.path.pathsep))
 CLEANUP_FILE_NAME_RE = '([^a-zA-Z0-9]|http|www|https)'
 ITEMS_DIR = os.path.join(HOME_DIR, 'items')
+FILE_DIR = os.path.join(ITEMS_DIR, 'file')
 ILLEGAL_FILENAME_CHARACTERS = re.compile(r'[~#%&*{}:<>?+|"]')
 MAX_NUMBER_OF_ITEMS = 250
 
@@ -93,7 +83,7 @@ class Storage:
     @classmethod
     def get_local_path(cls, obj):
         # type: (dict) -> str
-        local_path = os.path.join(os.path.join(ITEMS_DIR, obj['kind']), obj['uid'])
+        local_path = os.path.join(ITEMS_DIR, obj['kind'], obj['uid'])
         if obj['kind'] != 'file':
             local_path += '.txt'
         parent_dir = os.path.dirname(local_path)
@@ -102,6 +92,11 @@ class Storage:
         except:
             pass # allow multiple threads to create the dir at the same time
         return local_path
+
+    @classmethod
+    def load_item(cls, kind, uid):
+        # type: (str,str) -> dict
+        return cls.resolve(os.path.join(ITEMS_DIR, kind, uid))
 
     @classmethod
     def add_file(cls, body, data, format="wb"):
@@ -146,13 +141,13 @@ class Storage:
         assert isinstance(days, int), 'unexpected type %s: %s' % (type(days), days)
         search_start = time.time()
         command = cls.get_search_command(query, days)
-        paths = filter(None, cls.run_command(command))
+        paths = list(filter(None, cls.run_command(command)))
         logging.info('Run command "%s" ==> %d results' % (' '.join(command), len(paths)))
+        for n,p in enumerate(paths):
+            logging.debug('   ', n, p)
         resolve_start = time.time()
         results = list(filter(None, map(cls.resolve, paths)))
         cls.record_search_stats(query, len(paths), time.time() - search_start, len(results), time.time() - resolve_start)
-        for n,item in enumerate(results):
-            logging.debug('%d: %s %s' % (n, item.kind, item.label))
         cls.log_search_stats(query)
         return results
 
@@ -319,6 +314,7 @@ class Data(dict):
         dict.__init__(self)
         self.kind = '<none>'
         self.color = '#888'
+        self.email = ''
         self.persons = []
         self.receiver = ''
         self.uid = label
@@ -340,6 +336,12 @@ class Data(dict):
 
     def __hash__(self):
         return hash(self.uid)
+
+    def is_related_item(self, other):
+        return False
+
+    def get_related_items(self):
+        return []
 
     def __eq__(self, other):
         return isinstance(other, self.__class__) and self.uid == other.uid
@@ -370,7 +372,7 @@ class File(Data):
         self.uid = filename
         self.label = filename.replace('%20', ' ')
         self.timestamp = os.path.getmtime(path)
-        extension = os.path.splitext(path)[1][1:]
+        extension = os.path.splitext(path)[1][1:].lower()
         self.icon_size = 32
         self.zoomed_icon_size = 128
         icon = FILE_FORMAT_ICONS.get(extension, 'icons/file-icon.png')
@@ -381,6 +383,10 @@ class File(Data):
         self.icon = 'get?path=%s' % icon
         dict.update(self, vars(self))
         self.set_message_id(path)
+
+    def same_path(self, path):
+        logging.debug('Same path?', self.path[:len(FILE_DIR)], path)
+        return self.path[:len(FILE_DIR)] == path
 
     def set_message_id(self, path):
         self.message_id = os.path.basename(os.path.dirname(path))
@@ -402,14 +408,13 @@ if __name__ == '__main__':
                 logging.debug('%s=%s' % (k,v))
         logging.debug()
 
-    if False:
-        for result in Storage.search('Marc sent you ', days=21):
-            logging.debug(logging.LINE)
-            for k,v in result.items():
-                logging.debug('%s:  %s' % (k, v))
+    if True:
+        for item in Storage.search('anaconda', days=91):
+            if item.kind == 'contact':
+                logging.debug(' %s %s' % (item.uid, item.label))
         logging.debug()
 
-    if True:
+    if False:
         for kind in ['browser','file','gmail','contact']:
             logging.debug('%s: %d' % (kind, Storage.get_item_count(kind)))
 

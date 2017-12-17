@@ -28,11 +28,12 @@ class Worker(threading.Thread):
 
     def poll(self):
         if self.running:
+            logging.info('Polling importers')
             try:
                 self.importer.poll()
-                logging.info('Polling %s' % self.importer.__name__)
+                logging.debug('Polling %s' % self.importer.__name__)
             except Exception as e:
-                logging.error('POLLER: Error polling ', self.importer.__name__, e)
+                logging.error('POLLER: Error polling %s: %s' % (self.importer.__name__, e))
 
     def stop(self):
         self.running = False

@@ -1,9 +1,10 @@
 import collections
+import itertools
 import logging
 import storage
 import stopwords
 
-MOST_COMMON_COUNT = 25
+MOST_COMMON_COUNT = 2
 ITEMS_PER_DOMAIN = 21
 ADD_CONTENT_LABELS = False
 
@@ -38,26 +39,23 @@ def add_contact(contact, contacts):
     return contact
 
 
-def get_persons(items, contacts):
-    merged_contacts = [
-        (add_contact(contact, contacts), item)
+def get_persons(items):
+    return [(contact, item) for item in items for contact in item.persons]
+
+
+def add_related_items(items, me):
+    # type(list, str) -> list
+    related_items = [
+        related_item
         for item in items
-        for contact in item.persons
+        for related_item in item.get_related_items()
+        if not related_item.email == me
     ]
-    return merged_contacts
+    return list(set(list(items) + related_items))
 
 
-def add_persons(items, labels, me):
-    contacts = {}
-    non_contacts = [item for item in items if item.kind != 'contact']
-    for person, item in get_persons(items, contacts):
-        if person.email == me:
-            continue
-        labels[person].add(item)
-    return non_contacts + list(contacts.values())
-
-
-def remove_duplicates(count, items, keep_duplicates):
+def remove_duplicates(items, keep_duplicates):
+    # type(list, bool) -> list
     duplicates = set()
     items = sorted(items, key=lambda item: item.image)
     results = [item for item in items if keep_duplicates or not item.is_duplicate(duplicates)]
@@ -68,20 +66,16 @@ def remove_duplicates(count, items, keep_duplicates):
     return results
 
 
-def get_most_common_words(items, query):
+def get_most_common_words(items):
     counter = collections.Counter()
     for item in items:
         item.update_words(items)
         counter.update([
             word.lower()
-            for word in map(lambda(w): filter(type(w).isalnum, w), item.words)
+            for word in map(lambda w: filter(type(w).isalnum, w), item.words)
             if len(word) < 21 and not stopwords.is_stopword(word)
         ])
     most_common = {key for key, count in counter.most_common(MOST_COMMON_COUNT)}
-    if ' ' in query:
-        pass # most_common.update(stopwords.remove_stopwords(query))
-    if query in most_common:
-        most_common.remove(query)
     return most_common
 
 
@@ -102,33 +96,26 @@ def merge_repetitive_labels(labels):
     return {label: items for label, items in labels.items() if items}
 
 
-def get_labels(count, all_items, query='', me='', keep_duplicates=False):
-    labels = collections.defaultdict(set)
-    items = remove_duplicates(count, add_persons(all_items, labels, me), keep_duplicates)
-    default_label = Label(query)
-    if ADD_CONTENT_LABELS:
-        most_common_words = get_most_common_words(items, query)
-        for item in items:
-            intersection = set(item.words) & most_common_words
-            for key in intersection:
-                labels[Label(key)].add(item) # add item to a given label
-            if not intersection:
-                labels[default_label].add(item) # avoid "orphan" items
-        labels = merge_repetitive_labels(labels)
-    else:
-        contacts = [item for item in all_items if item.kind == 'contact']
-        contacts = remove_duplicates(count, contacts, keep_duplicates)
-        labels[default_label].update(contacts)
-        items.extend(contacts)
-    # debug_results(labels, all_items, items)
-    return labels, items
+def get_edges(items, me='', keep_duplicates=False):
+    # type(list, str, bool) -> (list, list)
+    items = add_related_items(items, me)
+    items = remove_duplicates(items, keep_duplicates)
+    edges = set()
+    def add_related_edge(item1, item2):
+        if item1.is_related_item(item2):
+            edges.add((item1, item2))
+    for item1, item2 in itertools.combinations(items, 2):
+        add_related_edge(item1, item2)
+        add_related_edge(item2, item1)
+    # debug_results(labels, items)
+    return list(edges), items
 
 
-def debug_results(labels, all_items, items):
+def debug_results(labels, items):
     show_details = False
     level = logging.get_level()
     logging.set_level(logging.DEBUG)
-    logging.debug('found %d labels with %d items, for %d total items' % (len(labels), len(items), len(all_items)))
+    logging.debug('found %d labels with %d items' % (len(labels), len(items)))
     logging.debug('Included:')
 
     def shorten(x):
@@ -156,14 +143,13 @@ def debug_results(labels, all_items, items):
 if __name__ == '__main__':
     level = logging.get_level()
     logging.set_level(logging.DEBUG)
-    import time
-    start = time.time()
-    query = 'funda'
-    items = storage.Storage.search(query, 5)
-    end = time.time()
-    logging.debug('search results in %d (%s) items in %d sec.' % (len(items), type(items[0]), end-start))
-    labels, all_items = get_labels(len(items), items, query)
-    for key, items in labels.items():
-        logging.debug('   label %s has %d items' % (repr(key.label), len(items)))
-    logging.debug('found %d labels for %d items' % (len(labels), len(all_items)))
-    logging.set_level(level)
+    query = 'blockchain'
+    items = storage.Storage.search(query, 3)
+    logging.debug('Found %d items.' % len(items))
+    edges, all_items = get_edges(items, 'laffra@gmail.com')
+    logging.debug('Edges:')
+    for item1, item2 in edges:
+        logging.debug('   %s - %s' % (repr(item1.label), repr(item2.label)))
+    logging.debug('Items:')
+    for item in items:
+        logging.debug('   %s' % repr(item.label))

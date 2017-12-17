@@ -1,10 +1,4 @@
-
-import sys
-if sys.version_info >= (3,):
-    from html.parser import HTMLParser
-else:
-    from HTMLParser import HTMLParser
-
+from html.parser import HTMLParser
 from re import sub
 from sys import stderr
 from traceback import print_exc

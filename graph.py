@@ -1,16 +1,8 @@
 from collections import defaultdict
 import logging
 import json
-
-import sys
-if sys.version_info >= (3,):
-    from urllib.parse import unquote
-else:
-    from urllib import url2pathname as unquote
-
-
+from urllib.parse import unquote
 import time
-
 from importers import browser
 from importers import contact
 from importers import gmail
@@ -64,30 +56,22 @@ class Graph:
     def get_graph(self, kind, keep_duplicates):
         self.my_pool.wait_completion()
         found_items = self.search_results[kind]
-        count = self.search_count[kind]
-        labels, items = classify.get_labels(count, found_items, self.query, MY_EMAIL_ADDRESS, keep_duplicates)
+        edges, items = classify.get_edges(found_items, MY_EMAIL_ADDRESS, keep_duplicates)
         removed_item_count = max(0, len(found_items) - len(items))
-        items = list(set(items + list(labels.keys())))
 
-        label_counts = ((label.label, len(items)) for label, items in labels.items())
-        most_common_labels = sorted(label_counts, key=lambda pair: -pair[1])
-        for n in range(len(most_common_labels)):
-            label, count = most_common_labels[n]
-            most_common_labels[n] = (label, LINE_COLORS[n] if n < len(LINE_COLORS) else '#DDD')
-        link_colors = dict(most_common_labels)
-        link_strokes = dict((label, 2 if color == '#DDD' else 2) for label, color in most_common_labels)
-
-        nodes_index = dict((item, n) for n, item in enumerate(items))
+        nodes_index = dict((item.uid, n) for n, item in enumerate(items))
         nodes = [vars(item) for item in items]
+        def get_color(contact):
+            return LINE_COLORS[nodes_index[contact.uid] % len(LINE_COLORS)]
         links = [
             {
-                'source': nodes_index[label],
-                'target': nodes_index[item],
-                'color': link_colors[label.label],
-                'stroke': link_strokes[label.label],
+                'source': nodes_index[item1.uid],
+                'target': nodes_index[item2.uid],
+                'color': get_color(item1),
+                'stroke': 1,
             }
-            for label, sub_items in labels.items() if label in nodes_index
-            for item in sub_items if item in nodes_index
+            for item1, item2 in edges
+            if item1.uid in nodes_index and item2.uid in nodes_index
         ]
 
         stats = {

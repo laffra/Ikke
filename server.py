@@ -5,19 +5,10 @@ import graph
 import poller
 from settings import settings
 from storage import Storage
-
-import sys
-if sys.version_info >= (3,):
-    from http.server import BaseHTTPRequestHandler
-    from http.server import HTTPServer
-    from socketserver import ThreadingMixIn
-    from urllib.parse import parse_qs
-else:
-    from BaseHTTPServer import BaseHTTPRequestHandler
-    from BaseHTTPServer import HTTPServer
-    from SocketServer import ThreadingMixIn
-    from urlparse import parse_qs
-
+from http.server import BaseHTTPRequestHandler
+from http.server import HTTPServer
+from socketserver import ThreadingMixIn
+from urllib.parse import parse_qs
 from importlib import import_module
 import jinja2
 import json
@@ -126,7 +117,6 @@ class Server(BaseHTTPRequestHandler):
             }), content_type='application/json')
         except Exception as e:
             logging.debug('No history for %s' % kind)
-
 
     def search(self):
         query = self.args.get('q', '')
@@ -244,7 +234,10 @@ if __name__ == '__main__':
     threaded_server = ThreadedHTTPServer(SERVER_ADDRESS, Server)
     webbrowser.open(MAIN_URL, autoraise=False)
     poller.start()
+    logging.set_level(logging.INFO)
     try:
         threaded_server.serve_forever()
     finally:
         poller.stop()
+        for kind in graph.ALL_ITEM_KINDS[1:]:
+            Storage.stop_loading(kind)

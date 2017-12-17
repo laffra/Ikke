@@ -84,10 +84,9 @@ class Contact(storage.Data):
         obj['phones'] = list(set(obj['phones'] + self.phones))
 
     def is_duplicate(self, duplicates):
-        if self.email in duplicates:
+        if self.label in duplicates:
             return True
-        duplicates.add(self.email)
-        logging.info('Unique contact: %s - %s' % (self.name, self.email))
+        duplicates.add(self.label)
         return False
 
     def __hash__(self):
