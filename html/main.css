@@ -20,7 +20,7 @@ image {
 }
 
 .logo {
-    padding: 9px 15px;
+    padding: 18px 15px;
     font-family: Arial;
     vertical-align: top;
     font-weight: bold;
@@ -265,7 +265,12 @@ td {
 }
 
 .summary a {
-    color: #777;
+    color: #4285f4;
+    text-decoration: none;
+}
+
+.summary a:hover {
+    text-decoration: underline;
 }
 
 .search-button {
@@ -389,4 +394,20 @@ table.ui-table tr:hover {
 }
 
 .searchbox {
+}
+
+.select-wrapper:hover {
+    border: 0 solid #4285f4;
+    border-bottom-width: 1px;
+}
+
+select {
+    -webkit-appearance: none;
+    border: 0 solid #ddd;
+    background: transparent;
+    font-size: 14px;
+    font-family: Arial;
+    color: #4285f4;
+    box-shadow: none;
+    outline: 0;
 }

@@ -1,3 +1,6 @@
+body {
+    padding-left: 32px;
+}
 
 button {
     background: lightgreen;
@@ -9,7 +12,6 @@ button {
     text-align: center;
     font-weight: bold;
     height: 24px;
-    float: left
 }
 
 button.loading {
@@ -44,6 +46,7 @@ tr:nth-child(even) {
 th, td {
     text-align: left;
     padding: 8px;
+    font-family: Arial;
 }
 
 th {
@@ -64,5 +67,44 @@ span.name {
     visibility: hidden;
     width: 32px;
     height: 32px;
-    float: left
 }
+
+
+.logo {
+    padding: 12px 0;
+    font-family: Arial;
+    vertical-align: top;
+    white-space: nowrap;
+    width: 53px;
+    font-size: 18px;
+}
+
+.logo .t1 {
+    font-weight: bold;
+    color: #0057e7;
+    font-size: 22px;
+}
+
+.logo .t2 {
+    font-weight: bold;
+    color: #ffa700;
+    font-size: 22px;
+}
+
+.logo .t3 {
+    font-weight: bold;
+    color: #d62d20;
+    font-size: 22px;
+}
+
+.logo .t4 {
+    font-weight: bold;
+    color: #35a853;
+    font-size: 22px;
+}
+
+.logo .title {
+    margin-left: 26px;
+    font-size: 20px;
+}
+

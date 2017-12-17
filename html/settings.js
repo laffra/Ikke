@@ -13,13 +13,15 @@ function check_history() {
         var spinner = $('#spinner-' + kind);
         $.getJSON('/history?kind=' + kind, function(response) {
             span.text(response.history);
+            load_button.css('visibility', 'visible');
+            clear_button.css('visibility', 'visible');
             if (response.is_loading) {
                 load_button.addClass('loading');
                 load_button.text('Stop loading');
                 spinner.css('visibility', 'visible');
             } else {
                 load_button.removeClass('loading');
-                load_button.text('Load more items');
+                load_button.text('Load more');
                 spinner.css('visibility', 'hidden');
                 clear_button.attr('disabled', false);
             }
@@ -27,7 +29,8 @@ function check_history() {
         .fail(function() {
             span.text('No history for ' + kind);
             spinner.css('visibility', 'hidden');
-            clear_button.remove();
+            load_button.css('visibility', 'hidden');
+            clear_button.css('visibility', 'hidden');
         })
     })
 }
@@ -56,7 +59,7 @@ $('.load-button').click(function() {
     var button = $(this);
     var kind = button.closest('tr').attr('kind');
     $('#spinner-' + kind).css('visibility', 'visible');
-    if (button.text() === 'Load more items') {
+    if (button.text() === 'Load more') {
         $.get('/load?kind=' + kind)
             .fail(function(error) {
                 $('#history-' + kind).text('Could not load more items ' + kind);

@@ -6,9 +6,10 @@ var RENDER_AS_GRID = localStorage.rendertype == 'grid';
 var TOP_HEIGHT = 250;
 
 var ALPHA_INITIAL = 0.5
-var ALPHA_WARMUP = 0.2
-var ALPHA_SHAKE = 0.2
+var ALPHA_WARMUP = 0.05
+var ALPHA_SHAKE = 0.1
 var ALPHA_DRAG = 0.1
+var ALPHA_WARMUP_COUNT = 7
 
 function init_tabs() {
     $('#tabs')
@@ -26,6 +27,7 @@ function init_tabs() {
 }
 
 function rerender(kind) {
+    size_selects();
     remember_filters(kind);
     document.location = "/?q=" + $('#query').val();
 }
@@ -199,54 +201,42 @@ function clear_spinner(kind, error, graph) {
 
 function update_summary(kind, graph) {
     var duration = {
-        day: 'the last day',
-        week: 'the last week',
-        month: 'the last month',
-        month3: 'the last three months',
-        month6: 'the last six months',
-        year: 'the last year',
-        forever: 'since forever'
+        day: 'one day',
+        week: 'one week',
+        month: 'one month',
+        month3: 'three months',
+        month6: 'six months',
+        year: 'one year',
+        forever: 'forever'
     }[get_preference("duration") || 'month'];
-
-    var rendertype = get_preference("rendertype") || 'graph';
 
     var count = graph.nodes.filter(function(node) { return node.kind != 'label'; }).length;
     var stats = JSON.parse(graph.stats);
-    var removed = stats.removed ? (
-             ', with ' +
-            '<a href=# class="summary-removed-' + kind + '">' + stats.removed +
-            ' similar results</a> removed,'
-        ) : '';
-    $('#summary-' + kind).html(
-        'Showing ' + count + ' results' + removed + ' for ' +
-        '<div class="summary-link" id="summary-duration-' + kind + '"><a href=#>' + duration + '</a></div>' +
-        ' as a ' +
-        '<div class="summary-link" id="summary-rendertype-' + kind + '"><a href=#>' + rendertype + '</a></div>'
-    );
-    $('#summary-duration-' + kind + ' a').click(function() {
-        $('#summary-duration-' + kind)
-            .empty()
+    var removed = !stats.removed ? '' :
+        ', with <a href=# class="removed-' + kind + '">' + stats.removed + ' similar results</a> removed,';
+    $('#summary-' + kind).append(
+        $('<span>').text('Showing ' + count + ' results for '),
+        $('<span>')
+            .addClass('select-wrapper')
             .append($('<select>')
-                .addClass('filter')
                 .attr('id', 'duration-' + kind)
                 .on('change', function() { rerender(kind); })
                 .append([
-                    $('<option>').attr('value', 'day').text('the last day'),
-                    $('<option>').attr('value', 'week').text('the last week'),
-                    $('<option>').attr('value', 'month').text('the last month'),
-                    $('<option>').attr('value', 'month3').text('the last three months'),
-                    $('<option>').attr('value', 'month6').text('the last six months'),
-                    $('<option>').attr('value', 'year').text('the last year'),
-                    $('<option>').attr('value', 'forever').text('since forever'),
+                    $('<option>').attr('value', 'day').text('one day'),
+                    $('<option>').attr('value', 'week').text('one week'),
+                    $('<option>').attr('value', 'month').text('one month'),
+                    $('<option>').attr('value', 'month3').text('three months'),
+                    $('<option>').attr('value', 'month6').text('six months'),
+                    $('<option>').attr('value', 'year').text('one year'),
+                    $('<option>').attr('value', 'forever').text('forever'),
                 ])
-            );
-        $('#duration-' + kind)
-            .val(get_preference('duration', 'month'))
-            .parent().parent().css('margin', '6px 0 2px 4px');
-    });
-    $('#summary-rendertype-' + kind + ' a').click(function() {
-        $('#summary-rendertype-' + kind)
-            .empty()
+                .val(get_preference('duration', 'month'))),
+        $('<span>')
+            .html(removed),
+        $('<span>')
+            .text(' as a '),
+        $('<span>')
+            .addClass('select-wrapper')
             .append($('<select>')
                 .addClass('filter')
                 .attr('id', 'rendertype-' + kind)
@@ -255,25 +245,23 @@ function update_summary(kind, graph) {
                     $('<option>').attr('value', 'graph').text('graph'),
                     $('<option>').attr('value', 'grid').text('grid'),
                 ])
-            );
-        $('#rendertype-' + kind)
-            .val(get_preference('rendertype', 'graph'))
-            .parent().parent().css('margin', '6px 0 2px 4px');
-    })
-    $('.summary-removed-' + kind).click(show_duplicates);
+                .val(get_preference('rendertype', 'graph'))),
+    );
+    $('.removed-' + kind).click(show_duplicates);
 
-    if (rendertype === "graph") {
+    if (get_preference('rendertype', 'graph') === "graph") {
         $(".zoom-buttons")
             .css('display', "inline-block");
     }
     $('#node-count').text('N:' + graph.nodes.length);
+    size_selects();
 }
 
 function load_graph(kind, w, h) {
     var force = d3.forceSimulation()
-            .force("link", d3.forceLink().distance(10).strength(0.5))
-            .force("x", d3.forceX(w/2).strength(0.1))
-            .force("y", d3.forceY(h/2).strength(0.9))
+            .force("link", d3.forceLink().distance(10).strength(3))
+            .force("x", d3.forceX(w/2).strength(0.3))
+            .force("y", d3.forceY(h/2).strength(2.5))
             .force("charge", d3.forceManyBody().strength(1))
             .alpha(ALPHA_INITIAL)
             .alphaDecay(0.05);
@@ -504,7 +492,7 @@ function load_graph(kind, w, h) {
         node.append("text")
             .attr("id", function(d) { return getId(d, 'text'); })
             .attr("x", 0)
-            .attr("y", function(d) { return d.font_size + d.icon_size/2 - 2; })
+            .attr("y", function(d) { return d.icon_size ? d.font_size + d.icon_size/2 - 2 : d.font_size/2; })
             .style("font-size", function(d) { return d.font_size; })
             .attr("fill", function(d) { return d.color; })
             .text(function(d) { return d.image ? d.domain : d.label; })
@@ -527,7 +515,7 @@ function load_graph(kind, w, h) {
         });
 
         function warmup() {
-            d3.range(7).forEach(function() {
+            d3.range(ALPHA_WARMUP_COUNT).forEach(function() {
                 force.alpha(ALPHA_INITIAL);
                 while (force.alpha() > ALPHA_WARMUP) {
                     force.tick();
@@ -585,6 +573,18 @@ $.hasUrlParams = function(name){
 $.urlParam = function(name){
     var results = new RegExp('[\?&]' + name + '=([^&#]*)').exec(document.location.href);
     return results && decodeURI(results[1]) || null;
+}
+
+function size_selects() {
+    $('select').each(function() {
+        var span = $("<span>")
+            .text($(this).find("option:selected").text())
+            .css('font-size', $(this).css('font-size'))
+            .css("visibility", "hidden")
+            .appendTo($(this).parent());
+        $(this).width(span.width());
+        span.remove();
+    });
 }
 
 render();

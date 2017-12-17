@@ -6,7 +6,13 @@
 </head>
 <body>
 
-<h1>IKKE Settings</h1>
+<div class="logo">
+    <span class="t1">I</span>
+    <span class="t2">K</span>
+    <span class="t3">K</span>
+    <span class="t4">E</span>
+    <span class="title">Settings</span>
+</div>
 
 <div id="ikke-extension">
     Setup Step 1: <button onclick="setup_extension_local()">Enable the extension</button>
@@ -36,12 +42,12 @@
             </td>
             <td>
                 <button class='clear-button' id="clear-button-{{kind}}">
-                    Delete all items
+                    Delete all
                 </button>
             </td>
             <td>
                 {% if can_load_more[kind] %}
-                    <button class="load-button" id="load-button-{{kind}}">Load more items</button>
+                    <button class="load-button" id="load-button-{{kind}}">Load more</button>
                 {% else %}
                     &nbsp;
                 {% endif %}
