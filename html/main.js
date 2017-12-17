@@ -527,7 +527,7 @@ function load_graph(kind, w, h) {
         function resize() {
             var width = $(window).width();
             var height = $(window).height() - TOP_HEIGHT;
-            if (width != w || height != h) {
+            if (Math.abs(width - w) > 100 || Math.abs(height - h) > 100) {
                 document.location.reload();
             }
         }
