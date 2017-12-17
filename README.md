@@ -7,9 +7,12 @@ visualizing the connections between de data across various sources.
 Why the name Ikke?
 
     Ikke is a Dutch colloquial/slang word, meaning "I", "Me", or "Myself". 
-    It is pronounced as "ik-kuh", and is mainly used in the Dutch phrase
+    It is pronounced as "ik-kuh", and is mainly used in the Dutch narcist phrase
     "Ikke, ikke, ikke, en de rest kan stikken", translated roughly into 
     "Me, me, me, and screw all others".
+
+When [pronounced correctly](https://upload.wikimedia.org/wikipedia/commons/3/39/Nl-ikke.ogg),
+Ikke sounds a lot like the English word "ticket", if you remove the leading and trailing t's.
 
 Ikke consists of various components:
  * Importers for data sources such as browser history, local downloads, gmail, facebook, etc.
