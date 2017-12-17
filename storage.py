@@ -14,10 +14,8 @@ from collections import defaultdict
 
 HOME_DIR = os.path.join(os.path.expanduser('~'), 'IKKE')
 HOME_DIR_SEGMENT_COUNT = len(HOME_DIR.split(os.path.pathsep))
-CLEANUP_FILE_NAME_RE = '([^a-zA-Z0-9]|http|www|https)'
 ITEMS_DIR = os.path.join(HOME_DIR, 'items')
 FILE_DIR = os.path.join(ITEMS_DIR, 'file')
-ILLEGAL_FILENAME_CHARACTERS = re.compile(r'[~#%&*{}:<>?+|"]')
 MAX_NUMBER_OF_ITEMS = 250
 
 GET_COMMENT_SCRIPT = '''osascript<<END

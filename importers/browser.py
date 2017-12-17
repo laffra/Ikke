@@ -86,7 +86,7 @@ def track(url, title, image, favicon, selection, timestamp=0, force=False):
     filename = re.sub(CLEANUP_URL_PATH_RE, '+', parsed_url.path[1:])
     if len(filename) > MAX_FILENAME_LENGTH:
         filename = filename[:MAX_FILENAME_FRACTION] + '+++' + filename[-MAX_FILENAME_FRACTION:]
-    uid = os.path.join(domain, filename)
+    uid = os.path.join(utils.cleanup_filename(domain), utils.cleanup_filename(filename))
     if not force and (is_meta_site(url) or not image and not selection):
         return
 
@@ -141,8 +141,11 @@ def load_history():
 def history():
     count = Storage.get_item_count('browser')
     if count > 0:
-        timestamp = settings.get('browser/when', 0)
-        when = datetime.datetime.fromtimestamp(timestamp).date()
+        try:
+            dt = datetime.datetime.fromtimestamp(settings.get('browser/when'))
+        except:
+            dt = datetime.datetime.now()
+        when = dt.date()
         return '%d sites loaded from your browser history on %s' % (count, when)
     return 'Nothing loaded yet.'
 
@@ -234,5 +237,6 @@ deserialize = BrowserItem.deserialize
 
 
 if __name__ == '__main__':
-    load_history()
+    print(history())
+    # load_history()
 
