@@ -150,7 +150,7 @@ class Server(BaseHTTPRequestHandler):
     def get_resource(self):
         path = os.path.join(os.path.join(os.path.dirname(__file__), 'html'), self.args['path'])
         query = self.args.get('query', '')
-        obj = Storage.resolve(path)
+        obj = Storage.resolve_path(path)
         if obj:
             handler = import_module('importers.%s' % obj['kind'])
             if hasattr(handler, 'render'):
