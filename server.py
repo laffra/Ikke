@@ -116,7 +116,7 @@ class Server(BaseHTTPRequestHandler):
                 'history': Storage.get_history(kind)
             }), content_type='application/json')
         except Exception as e:
-            logging.debug('No history for %s' % kind)
+            logging.debug('No history for %s' % kind, e)
 
     def search(self):
         query = self.args.get('q', '')

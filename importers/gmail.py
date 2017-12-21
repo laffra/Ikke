@@ -14,6 +14,7 @@ import stopwords
 import storage
 import time
 import traceback
+import utils
 from urllib.parse import urlparse
 
 
@@ -22,7 +23,7 @@ MAXIMUM_THREAD_COUNT = 15
 URL_MATCH_RE = re.compile('https?://[\w\d:#@%/;$()~_?\+-=\.&]*')
 DATESTRING_RE = re.compile(' [-+].*')
 
-UTF8_MARKERS_RE = re.compile('=\?utf-8\?.\?|\?=')
+CLEANUP_FILENAME_RE = re.compile('[<>@]')
 
 PATH_ATTRIBUTES = {
     'kind',
@@ -87,7 +88,7 @@ class GMail():
                 continue
             filename = part.get_filename()
             body = part.get_payload(decode=True)
-            path = os.path.join(msg['Message-ID'], filename)
+            path = os.path.join(utils.cleanup_filename(msg['Message-ID']), utils.cleanup_filename(filename))
             if filename and body:
                 storage.Storage.add_binary_data(
                     body,
