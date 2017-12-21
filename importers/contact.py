@@ -46,6 +46,7 @@ def find_contact(email, name='', phones=None, timestamp=None):
             'email': email,
             'label': name,
             'names': [name] if name else [],
+            'timestamp': timestamp or time.time(),
             'phones': phones or [],
         })
         logging.debug('CONTACT: new contact ==> %s %s' % (email, contact.names))
@@ -66,7 +67,7 @@ class Contact(storage.Data):
         self.color = 'purple'
         self.font_size = 14
         self.name = self.label
-        self.timestamp = time.time()
+        self.timestamp = obj['timestamp']
         assert self.email, 'Email missing for %s\nin %s' % (self, obj)
         assert self.label, 'Label missing for %s\nin %s' % (self, obj)
         assert self.uid, 'UID missing for %s in\n%s' % (self, obj)
@@ -84,9 +85,9 @@ class Contact(storage.Data):
         obj['phones'] = list(set(obj['phones'] + self.phones))
 
     def is_duplicate(self, duplicates):
-        if self.label in duplicates:
+        if self.email in duplicates:
             return True
-        duplicates.add(self.label)
+        duplicates.add(self.email)
         return False
 
     def __hash__(self):
