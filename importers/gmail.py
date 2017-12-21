@@ -139,7 +139,9 @@ class GMail():
                         inbox = reader.process_messages_for_day(reader.inbox, day)
                         sent = reader.process_messages_for_day(reader.sent, day)
                         contact.cleanup()
-                        logging.info('Processed %d inbox and %d sent messages for day %d' % (inbox or 0, sent or 0, day))
+                        logging.info('Processed %d inbox and %d sent messages for day %d' % (
+                            inbox or 0, sent or 0, day
+                        ))
                         logging.debug(cls.history())
                 except Exception as e:
                     logging.error('Cannot load message for day %d: %s' % (day, e))
@@ -157,8 +159,9 @@ class GMail():
 
     def process_messages_for_day(self, connection, day):
         query = '(since "%s" before "%s")' % (self.get_day_string_internal(day), self.get_day_string_internal(day - 1))
-        logging.debug('Get messages for day -%d: %s' % (day, query))
-        return self.parse_messages(connection, self.fetch_message_ids(connection, query))
+        logging.info('Get messages for day -%d: %s' % (day, query))
+        message_ids = self.fetch_message_ids(connection, query)
+        return self.parse_messages(connection, message_ids[-3:])
 
     def fetch_message_ids(self, connection, query):
         result, message_ids = connection.uid('search', None, query)
@@ -220,9 +223,9 @@ class GMail():
         senders = self.get_addresses(msg.get_all('From', []), timestamp)
         receivers = self.get_addresses(msg.get_all('To', []), timestamp)
         ccs = self.get_addresses(msg.get_all('Cc', []), timestamp)
+        persons = msg.get_all('From', []) + msg.get_all('To', []) + msg.get_all('Cc', [])
         emails = sorted(list(set(receivers + ccs + senders)))
         thread = '%s - %s' % (label, emails)
-        logging.debug('Attachments for "%s":' % label)
         files = self.save_attachments(msg, timestamp)
         storage.Storage.add_data({
             'uid': msg['uid'] or msg['Message-ID'],
@@ -230,6 +233,7 @@ class GMail():
             'senders': senders,
             'ccs': ccs,
             'receivers': receivers,
+            'persons': persons,
             'thread': thread,
             'subject': subject,
             'label': label,
@@ -382,11 +386,21 @@ def cleanup():
     pass
 
 if __name__ == '__main__':
-    logging.set_level(logging.INFO)
+    # logging.set_level(logging.DEBUG)
     # settings.clear()
     # load(1, 0, True)
     # load(3650, 0, True)
-    GMail.load(4, 3)
+    #GMail.load(5, 0)
     # logging.info('History: %s' % history())
     # poll()
+    gmail_dir = os.path.join(storage.ITEMS_DIR, 'gmail')
+    for _,_,files in os.walk(gmail_dir):
+        for n,filename in enumerate(files):
+            path = os.path.join(gmail_dir, filename)
+            obj = storage.Storage.resolve_path(path)
+            if n%100 == 0:
+                print(n, path)
+            for person in obj.persons:
+                person.timestamp = obj.timestamp
+                person.save()
 
