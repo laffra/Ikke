@@ -94,7 +94,7 @@ class Storage:
     @classmethod
     def load_item(cls, kind, uid):
         # type: (str,str) -> dict
-        return cls.resolve(os.path.join(ITEMS_DIR, kind, uid))
+        return cls.resolve_path(os.path.join(ITEMS_DIR, kind, uid))
 
     @classmethod
     def add_file(cls, body, data, format="wb"):
@@ -141,13 +141,17 @@ class Storage:
         command = cls.get_search_command(query, days)
         paths = list(filter(None, cls.run_command(command)))
         logging.info('Run command "%s" ==> %d results' % (' '.join(command), len(paths)))
-        for n,p in enumerate(paths):
-            logging.debug('   ', n, p)
         resolve_start = time.time()
-        results = list(filter(None, map(cls.resolve, paths)))
+        results = list(ContentMatcher.match(query, map(cls.resolve_path, paths)))
+        for n,item in enumerate(results):
+            logging.debug(logging.LINE)
+            logging.debug('   ', n, item.kind)
+            for k,v in item.items():
+                logging.debug('  %010s %s' % (k, v))
         cls.record_search_stats(query, len(paths), time.time() - search_start, len(results), time.time() - resolve_start)
         cls.log_search_stats(query)
         return results
+
 
     @classmethod
     def record_search_stats(cls, query,  search_count, search_duration, resolve_count, resolve_duration):
@@ -191,7 +195,7 @@ class Storage:
         return cls.search(filename, operator='-name')
 
     @classmethod
-    def resolve(cls, path):
+    def resolve_path(cls, path):
         # type: (str) -> (dict,None)
         if not path or not os.path.isfile(path):
             logging.debug('skip non file: %s' % path[len(HOME_DIR):])
@@ -307,6 +311,35 @@ class Storage:
             logging.info('Cleared all data for "%s"' % path)
             return True
 
+
+class ContentMatcher():
+    # todo: shorten keys to 1 letter, so we don't need this matcher
+    key_patterns = {}
+
+    @classmethod
+    def match(cls, query, items):
+        query_words = re.compile(query.replace(' ', '|'))
+        print(query_words)
+        for n, item in enumerate(items):
+            if not item:
+                continue
+            if query_words.search(cls.keys(item)) and not query_words.search(cls.content(item)):
+                continue
+            yield item
+
+    @classmethod
+    def keys(cls, item):
+        pattern = cls.key_patterns.get(item.kind)
+        if not pattern:
+            pattern = cls.key_patterns[item.kind] = ' '.join(item.keys())
+        return pattern
+
+    @classmethod
+    def content(cls, item):
+        return ' '.join(map(str, filter(lambda value: isinstance(value, str), item.values())))
+
+
+
 class Data(dict):
     def __init__(self, label, obj=None):
         dict.__init__(self)
@@ -398,19 +431,16 @@ class File(Data):
 Storage.setup()
 
 if __name__ == '__main__':
-    logging.set_level(logging.DEBUG)
+    logging.set_level(logging.INFO)
     if False:
         path = "/Users/laffra/IKKE/gmail/content_type/text-html/kind/gmail/label/activity aler ... n alert limit/message_id/<22f44d4d-ad5a-40f6-83dc-336b2b94294c@xtnvs5mta401.xt.local>/receivers/[/1/laffra@gmail.com/senders/[/1/onlinebanking@ealerts.bankofamerica.com/subject/Activity Alert: Electronic or Online Withdrawal Over Your Chosen Alert Limit/thread/activity aler ... n alert limit - ['laffra@gmail.com', 'onlinebanking@ealerts.bankofamerica.com']/timestamp/1510537596/uid/16455 (UID 92562 RFC822 {25744}.txt"
-        for k,v in Storage.resolve(path).items():
+        for k,v in Storage.resolve_path(path).items():
             if v:
                 logging.debug('%s=%s' % (k,v))
         logging.debug()
 
     if True:
-        for item in Storage.search('anaconda', days=91):
-            if item.kind == 'contact':
-                logging.debug(' %s %s' % (item.uid, item.label))
-        logging.debug()
+        Storage.search('body', days=1)
 
     if False:
         for kind in ['browser','file','gmail','contact']:
