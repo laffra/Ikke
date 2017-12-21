@@ -46,7 +46,7 @@ class Graph:
 
     def search(self, timestamp):
         start_time = time.time()
-        all_items = Storage.search(unquote(self.query), timestamp)
+        all_items = set(Storage.search(unquote(self.query), timestamp))
         duration = time.time() - start_time
         self.add_result('all', len(all_items), all_items, duration)
         for kind in MY_ITEM_KINDS:
@@ -55,6 +55,11 @@ class Graph:
 
     def get_graph(self, kind, keep_duplicates):
         self.my_pool.wait_completion()
+        if kind == 'contact':
+            graph = self.get_graph('gmail', keep_duplicates)
+            graph['links'] = []
+            graph['nodes'] = [node for node in graph['nodes'] if node['kind'] == 'contact']
+            return graph
         found_items = self.search_results[kind]
         edges, items = classify.get_edges(found_items, MY_EMAIL_ADDRESS, keep_duplicates)
         removed_item_count = max(0, len(found_items) - len(items))
