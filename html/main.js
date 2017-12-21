@@ -24,6 +24,9 @@ function init_tabs() {
         .css('display', 'block')
     $('#google').click(search_google);
     $('#settings').click(settings);
+    $('#main').css('display', 'block')
+    $('.tab-contents').width(window.innerWidth - 2 * $('.logo').width() - 96);
+
 }
 
 function rerender(kind) {
@@ -316,11 +319,6 @@ function load_graph(kind, w, h) {
         graph.nodes.forEach(function(d) {
             d.vx = 3;
             d.vy = 0.1
-            if (d.fixed) {
-                d.fx = w/2;
-                d.fy = h/2;
-                console.log('fix ' + d.label)
-            }
         });
 
         function getId(d, type) {
@@ -539,22 +537,25 @@ function load_graph(kind, w, h) {
 }
 
 function launch(kind, label, url, path) {
-    $(document.body)
-        .css('background', 'white')
-        .html('<img src="get?path=icons/loading_spinner.gif" class="spinner">');
+    function replace(url) {
+        $(document.body)
+            .css('background', 'white')
+            .html('<img src="get?path=icons/loading_spinner.gif" class="spinner">');
+        document.location = url;
+    }
     switch (kind) {
         case "label":
         case "contact":
             set_preference("query", label);
-            document.location = "/?q=" + label;
+            replace("/?q=" + label);
             break
         case "browser":
         case "google":
-            document.location = url;
+            replace(url);
             break;
         case "file":
         case "gmail":
-            document.location = "/get?query=" + localStorage.query + "&path=" + path;
+            window.open("/get?query=" + localStorage.query + "&path=" + path);
             break;
         default:
             alert('Internal error: Unknown node: ' + kind);

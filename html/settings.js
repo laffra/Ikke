@@ -55,6 +55,10 @@ $('.clear-button').click(function() {
         });
 });
 
+$('.logo').click(function() {
+    document.location = '/';
+});
+
 $('.load-button').click(function() {
     var button = $(this);
     var kind = button.closest('tr').attr('kind');

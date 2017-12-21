@@ -36,6 +36,7 @@ button:disabled {
 }
 
 table {
+    margin-top: 15px;
     border-collapse: collapse;
 }
 
@@ -77,6 +78,8 @@ span.name {
     white-space: nowrap;
     width: 53px;
     font-size: 18px;
+    cursor: pointer;
+    display: inline;
 }
 
 .logo .t1 {
@@ -103,8 +106,9 @@ span.name {
     font-size: 22px;
 }
 
-.logo .title {
+.title {
     margin-left: 26px;
-    font-size: 20px;
+    font-family: Arial;
+    font-size: 18px;
 }
 
