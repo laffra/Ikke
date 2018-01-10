@@ -42,7 +42,7 @@ function getFirstBigImage() {
         });
     if (images) {
         var img = images.eq(0);
-        var src = img.attr('src') || img.css('background-image').replace('url("', '').replace('")', '');
+        var src = (img.attr('src') || img.css('background-image') || '').replace('url("', '').replace('")', '');
         if (src && src.startsWith('//')) {
             src = document.location.protocol + src;
         }

@@ -1,27 +1,20 @@
+from settings import settings
 import storage
 
-
-PATH_ATTRIBUTES = {
-    'kind',
-    'uid',
-    'timestamp',
-}
+keys = ('uid', 'timestamp')
+path_keys = ('label', 'uid', 'icon', 'image', 'words')
 
 
 def deserialize(obj):
     return obj if isinstance(obj, storage.File) else storage.File(obj['path'])
 
 
-def history():
-    msg = 'Nothing loaded yet.'
-    count = storage.Storage.get_item_count('file')
-    if count > 0:
-        msg = '%d files were loaded as attachments for gmail messages' % count
-    return msg
+def get_status():
+    return '%d files were loaded as attachments for gmail messages' % settings['file/count']
 
 
 def delete_all():
-    return storage.Storage.clear('file')
+    pass
 
 
 def poll():

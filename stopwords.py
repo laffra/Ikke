@@ -28,7 +28,7 @@ IS_NUMBER_RE = re.compile('^[0-9]*$')
 def is_stopword(word):
     return remove_stopwords(word) == []
 
-def remove_stopwords(s):
+def remove_stopwords(s: str) -> []:
     words = re.sub(WORDS_RE, '  ', s)
     contents = re.sub(STOPWORDS_RE, ' ', ' %s ' % words).strip()
     words = re.sub(SPACES_RE, ' ', contents.lower()).split()

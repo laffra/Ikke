@@ -1,11 +1,11 @@
 import json
 import os
-import logging
-import storage
+import time
+import utils
 import threading
 
 
-SETTINGS_PATH = os.path.join(storage.HOME_DIR, 'settings.json')
+SETTINGS_PATH = os.path.join(utils.HOME_DIR, 'settings.json')
 
 
 class Settings(dict):
@@ -25,22 +25,35 @@ class Settings(dict):
         dict.__setitem__(self, key, value)
         self.save()
 
+    def __getitem__(self, key):
+        try:
+            return dict.__getitem__(self, key) or 0
+        except KeyError:
+            return 0
+
     def clear(self):
         with self.lock:
             dict.clear(self)
             self.save()
 
-    def increment(self, key, value):
+    def increment(self, key, value=1):
         with self.lock:
-            self[key] = self[key] + value
+            self[key] += value
 
     def save(self):
-        with open(self.path, 'w') as f:
+        tmp = '%s_%s' % (self.path, time.time())
+        with open(tmp, 'w') as f:
             json.dump(self, f, separators=(',', ':'))
+        os.replace(tmp, self.path)
+
 
 
 settings = Settings(SETTINGS_PATH)
 
+
+if False:
+    print('Settings:')
+    for k,v in sorted(settings.items()): print('   ', k, repr(v))
 
 if __name__ == '__main__':
     # settings.clear()

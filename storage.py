@@ -1,22 +1,19 @@
 import cache
+import compressor
 import datetime
 from importlib import import_module
-import json
 import logging
 import os
-import re
+from settings import settings
 import shutil
 import stat
 import stopwords
 import subprocess
+import utils
 import time
 from collections import defaultdict
 
-HOME_DIR = os.path.join(os.path.expanduser('~'), 'IKKE')
-HOME_DIR_SEGMENT_COUNT = len(HOME_DIR.split(os.path.pathsep))
-ITEMS_DIR = os.path.join(HOME_DIR, 'items')
-FILE_DIR = os.path.join(ITEMS_DIR, 'file')
-MAX_NUMBER_OF_ITEMS = 250
+MAX_NUMBER_OF_ITEMS = 500
 
 GET_COMMENT_SCRIPT = '''osascript<<END
     tell application "Finder"
@@ -53,18 +50,24 @@ FILE_FORMAT_ICONS = {
     'file': 'icons/file-icon.png',
 }
 FILE_FORMAT_IMAGE_EXTENSIONS = { 'png', 'ico', 'jpg', 'jpeg', 'gif', 'pnm' }
+ITEM_KINDS = [ 'contact', 'gmail', 'browser', 'file', 'facebook' ]
 
+logger = logging.getLogger(__name__)
+
+item_handlers = { }
 
 class Storage:
     stats = defaultdict(int)
     search_cache = cache.Cache(60)
     file_cache = cache.Cache(60)
+    history_cache = cache.Cache(60)
 
     @classmethod
     def add_data(cls, data):
         # type: (dict) -> None
+        obj = compressor.deserialize(compressor.serialize(data))
         cls.add_file(
-            json.dumps(data),
+            compressor.serialize(data),
             data,
             "w"
         )
@@ -81,9 +84,12 @@ class Storage:
     @classmethod
     def get_local_path(cls, obj):
         # type: (dict) -> str
-        local_path = os.path.join(ITEMS_DIR, obj['kind'], obj['uid'])
-        if obj['kind'] != 'file':
-            local_path += '.txt'
+        local_path = os.path.join(utils.ITEMS_DIR, obj['kind'], obj['uid'])
+        if local_path.endswith('/'):
+            local_path += '_'
+        if obj['kind'] not in ('contact', 'file'):
+            path_keys = item_handlers[obj['kind']].path_keys
+            local_path = os.path.join(utils.ITEMS_DIR, obj['kind'], compressor.encode(obj, path_keys) + '.txt')
         parent_dir = os.path.dirname(local_path)
         try:
             os.makedirs(parent_dir)
@@ -92,30 +98,25 @@ class Storage:
         return local_path
 
     @classmethod
-    def load_item(cls, kind, uid):
-        # type: (str,str) -> dict
-        return cls.resolve_path(os.path.join(ITEMS_DIR, kind, uid))
-
-    @classmethod
     def add_file(cls, body, data, format="wb"):
         # type: (bytes,dict,str) -> None
         assert 'kind' in data, "Kind needed"
         assert 'uid' in data, "UID needed"
         assert 'timestamp' in data, "Timestamp needed"
         assert type(data['timestamp']) in (int,float), "Number timestamp needed, not %s" % type(data['timestamp'])
-        cls.stats['writes'] += 1
         path = cls.get_local_path(data)
-        logging.debug('write %s' % path)
+        logger.debug('write %s' % path)
         for k,v in data.items():
-            logging.debug('     %09s %s' % (k,v))
+            logger.debug('     %09s %s' % (k, v))
         try:
             with open(path, format) as fout:
+                cls.stats['writes'] += 1
                 fout.write(body)
             os.utime(path, (data['timestamp'], data['timestamp']))
             if path in cls.file_cache:
                 del cls.file_cache[path]
         except IOError as e:
-            logging.error('Cannot add file: %s' % e)
+            logger.error('Cannot add file. Path len = %d' % len(path))
             raise
 
     @classmethod
@@ -124,11 +125,11 @@ class Storage:
         if os.name == 'nt':
             local_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'localsearch')
             since = cls.get_year_month_day(days)
-            return ['cscript', '/nologo', os.path.join(local_dir, 'search.vbs'), HOME_DIR, query, since]
+            return ['cscript', '/nologo', os.path.join(local_dir, 'search.vbs'), utils.HOME_DIR, query, since]
         elif os.name == 'posix':
             operator = '-interpret'
             since = 'modified:%s-%s' % (cls.get_day_month_year(days), cls.get_day_month_year(-1))
-            return ['mdfind', '-onlyin', HOME_DIR, operator, query, since]
+            return ['mdfind', '-onlyin', utils.HOME_DIR, operator, query, since]
         else:
             raise ValueError('Unsupported OS:', os.name)
 
@@ -137,57 +138,58 @@ class Storage:
         # type: (str,int,str) -> list
         assert isinstance(query, str)
         assert isinstance(days, int), 'unexpected type %s: %s' % (type(days), days)
+        cls.stats = defaultdict(int)
         search_start = time.time()
         command = cls.get_search_command(query, days)
         paths = list(filter(None, cls.run_command(command)))
-        logging.info('Run command "%s" ==> %d results' % (' '.join(command), len(paths)))
+        logger.info('Run command "%s" ==> %d results' % (' '.join(command), len(paths)))
+        for path in paths:
+            logger.debug('   %s', path)
         resolve_start = time.time()
-        results = list(ContentMatcher.match(query, map(cls.resolve_path, paths)))
+        query_words = query.split(' ')
+        results = list(filter(lambda item: item and item.matches(query_words), map(cls.resolve_path, paths)))
+        logger.debug('==> %d resolved items' % len(results))
         for n,item in enumerate(results):
-            logging.debug(logging.LINE)
-            logging.debug('   ', n, item.kind)
-            for k,v in item.items():
-                logging.debug('  %010s %s' % (k, v))
+            logger.debug('   %d %s', n, item.kind)
         cls.record_search_stats(query, len(paths), time.time() - search_start, len(results), time.time() - resolve_start)
-        cls.log_search_stats(query)
         return results
-
 
     @classmethod
     def record_search_stats(cls, query,  search_count, search_duration, resolve_count, resolve_duration):
         cls.stats['searches'] += 1
-        cls.stats['raw results'] = search_count
-        cls.stats['search time'] += search_duration
+        cls.stats['raw_results'] = search_count
+        cls.stats['search_time'] += search_duration
         cls.stats['results'] = resolve_count
-        cls.stats['resolve time'] += resolve_duration
+        cls.stats['resolve_time'] += resolve_duration
         cls.log_search_stats(query)
 
     @classmethod
     def log_search_stats(cls, query=None):
-        logging.debug('Storage Statistics:')
-        logging.debug(logging.LINE)
+        logger.debug('Storage Statistics:')
         if query:
-            logging.debug('    query: "%s"' % query)
+            logger.debug('    query: "%s"' % query)
         for k,v in cls.stats.items():
-            logging.debug('    %s: %s' % (k, v))
-        logging.debug(logging.LINE)
+            logger.debug('    %s: %s' % (k, v))
 
     @classmethod
     def search_contact(cls, email):
         # type: (str) -> dict
-        contact = cls.search_cache.get(email)
-        if not contact:
-            path = os.path.join(HOME_DIR, 'items', 'contact', email + '.txt')
+        person = cls.search_cache.get(email)
+        if not person:
+            path = os.path.join(utils.HOME_DIR, 'items', 'contact', email)
             if os.path.exists(path):
                 with open(path, 'r') as f:
+                    cls.stats['contacts_read'] += 1
                     from importers import contact
                     try:
-                        contact = contact.deserialize(json.loads(f.read()))
-                        cls.stats['contacts read'] += 1
+                        person = contact.deserialize(compressor.deserialize(f.read()))
+                        person.path = person['path'] = path
                     except:
-                        pass
-            cls.search_cache[email] = contact
-        return contact
+                        logger.error('Could not deserialize %s', path)
+            else:
+                logger.error('Contact not found: %s', path)
+            cls.search_cache[email] = person
+        return person
 
     @classmethod
     def search_file(cls, filename):
@@ -195,48 +197,49 @@ class Storage:
         return cls.search(filename, operator='-name')
 
     @classmethod
+    def load_item(cls, path):
+        with open(path) as f:
+            Storage.stats['items_read'] += 1
+            try:
+                obj = compressor.deserialize(f.read())
+                obj['kind'] = path[len(utils.ITEMS_DIR) + 1:-4].split(os.path.sep)[0]
+                return cls.to_item(obj, path)
+            except:
+                Storage.stats['files'] += 1
+                return File(path)
+
+    @classmethod
     def resolve_path(cls, path):
         # type: (str) -> (dict,None)
         if not path or not os.path.isfile(path):
-            logging.debug('skip non file: %s' % path[len(HOME_DIR):])
+            logger.info('skip non file: %s' % path[len(utils.HOME_DIR):])
             return None
         item = cls.file_cache.get(path)
         if not item:
-            with open(path) as f:
-                obj = None
-                try:
-                    obj = json.loads(f.read())
-                    Storage.stats['items read'] += 1
-                except Exception as e:
-                    logging.debug('no json: %s' % path)
-                    Storage.stats['files'] += 1
-                    item = File(path)
-            if obj:
+            kind, *parts = path[len(utils.ITEMS_DIR) + 1:-4].split(os.path.sep)
+            try:
+                obj = compressor.decode(os.path.sep.join(parts))
+            except Exception as e:
+                item = cls.load_item(path)
+                cls.file_cache[path] = item
+            else:
+                obj['kind'] = kind
                 item = cls.to_item(obj, path)
-            cls.file_cache[path] = item
         return item
 
     @classmethod
-    def get_history(cls, kind):
-        handler = import_module('importers.%s' % kind)
-        return handler.history()
+    def can_load_more(cls, kind):
+        return settings['%s/can_load_more' % kind]
 
     @classmethod
-    def can_load_more(cls, kind):
-        try:
-            handler = import_module('importers.%s' % kind)
-            return handler.can_load_more()
-        except Exception as e:
-            logging.debug('Cannot see if can load more: %s %s' % (kind, e))
-            return False
+    def can_delete(cls, kind):
+        return settings['%s/count' % kind] > 0
 
     @classmethod
     def to_item(cls, obj, path):
-        handler = import_module('importers.%s' % obj['kind'])
+        handler = item_handlers[obj['kind']]
         item = handler.deserialize(obj)
         item.path = item['path'] = path
-        dt = datetime.datetime.fromtimestamp(float(item.timestamp))
-        item.date = '%s/%s/%s %s:%s' % (dt.year, dt.month, dt.day, dt.hour, dt.minute)
         return item
 
     @classmethod
@@ -265,79 +268,98 @@ class Storage:
 
     @classmethod
     def setup(cls):
-        if not os.path.exists(HOME_DIR):
-            os.mkdir(HOME_DIR)
-            os.chmod(HOME_DIR, stat.S_IEXEC)
+        if not os.path.exists(utils.HOME_DIR):
+            os.mkdir(utils.HOME_DIR)
+            os.chmod(utils.HOME_DIR, stat.S_IEXEC)
 
     @classmethod
     def get_item_count(cls, kind):
-        path = os.path.join(HOME_DIR, 'items', kind)
+        path = os.path.join(utils.HOME_DIR, 'items', kind)
         count = sum(len(files) for _,_,files in os.walk(path))
         return count
 
     @classmethod
     def load(cls, kind):
+        if settings['%s/loading' % kind]:
+            logger.info('Already loading %s' % kind)
+            return
+        logger.info('Load %s' % kind)
         try:
-            import_module('importers.%s' % kind).load()
+            settings['%s/loading' % kind] = True
+            item_handlers[kind].load()
         except Exception as e:
-            logging.debug('Could not load %s: %s' % (kind, e))
+            logger.error('Could not load %s: %s' % (kind, e))
+        finally:
+            settings['%s/loading' % kind] = False
 
     @classmethod
     def stop_loading(cls, kind):
-        try:
-            import_module('importers.%s' % kind).stop_loading()
-        except Exception as e:
-            logging.debug('Could not stop loading %s: %s' % (kind, e))
+        settings['%s/loading' % kind] = False
 
     @classmethod
-    def is_loading(cls, kind):
-        try:
-            return import_module('importers.%s' % kind).is_loading()
-        except Exception as e:
-            logging.debug('Could not check if %s is loading: %s' % (kind, e))
+    def loading(cls, kind):
+        return settings['%s/loading' % kind]
 
     @classmethod
     def delete_all(cls, kind):
+        if settings['%s/deleting' % kind]:
+            logger.info('Already loading %s' % kind)
+            return
         try:
-            return import_module('importers.%s' % kind).delete_all()
+            settings['%s/deleting' % kind] = True
+            import_module('importers.%s' % kind).delete_all()
+            cls.clear(kind)
         except Exception as e:
-            logging.error('Could not stop delete all %s: %s' % (kind, e))
+            logger.error('Could not stop delete all %s: %s' % (kind, e))
+        finally:
+            settings['%s/deleting' % kind] = False
+            settings['%s/count' % kind] = 0
+
+    @classmethod
+    def stop_deleting(cls, kind):
+        settings['%s/deleting' % kind] = False
+
+    @classmethod
+    def deleting(cls, kind):
+        return settings['%s/deleting' % kind]
+
+    @classmethod
+    def refresh_status(cls):
+        for kind in ITEM_KINDS:
+            settings['%s/count'] = cls.get_item_count(kind)
+
+    @classmethod
+    def poll(cls):
+        cls.refresh_status()
+
+    @classmethod
+    def get_status(cls):
+        status = {}
+        start = time.time()
+        for kind in ITEM_KINDS:
+            if time.time()-start>0.1: logger.info('%.1fs: getting status for %s' % (time.time() - start, kind))
+            status[kind] = {
+                'pending': settings['%s/pending' % kind],
+                'loading': cls.loading(kind),
+                'deleting': cls.deleting(kind),
+                'count': settings['%s/count' % kind],
+                'history': item_handlers[kind].get_status(),
+            }
+            start = time.time()
+        return status
 
     @classmethod
     def clear(cls, kind):
-        path = os.path.realpath(os.path.join(HOME_DIR, 'items', kind))
-        if path.startswith(os.path.join(HOME_DIR, 'items')):
-            shutil.rmtree(path)
-            logging.info('Cleared all data for "%s"' % path)
-            return True
-
-
-class ContentMatcher():
-    # todo: shorten keys to 1 letter, so we don't need this matcher
-    key_patterns = {}
-
-    @classmethod
-    def match(cls, query, items):
-        query_words = re.compile(query.replace(' ', '|'))
-        print(query_words)
-        for n, item in enumerate(items):
-            if not item:
-                continue
-            if query_words.search(cls.keys(item)) and not query_words.search(cls.content(item)):
-                continue
-            yield item
-
-    @classmethod
-    def keys(cls, item):
-        pattern = cls.key_patterns.get(item.kind)
-        if not pattern:
-            pattern = cls.key_patterns[item.kind] = ' '.join(item.keys())
-        return pattern
-
-    @classmethod
-    def content(cls, item):
-        return ' '.join(map(str, filter(lambda value: isinstance(value, str), item.values())))
-
+        path = os.path.realpath(os.path.join(utils.HOME_DIR, 'items', kind))
+        import tempfile
+        import threading
+        if os.path.exists(path) and path.startswith(utils.ITEMS_DIR):
+            tmpdir = tempfile.mkdtemp()
+            print('mv to tmpdir: ' + tmpdir)
+            shutil.move(path, tmpdir)
+            threading.Thread(target=lambda: shutil.rmtree(tmpdir)).start()
+        time.sleep(0.5)
+        logger.info('Cleared all data for "%s"' % path)
 
 
 class Data(dict):
@@ -354,10 +376,13 @@ class Data(dict):
         self.icon = 'get?path=icons/white_pixel.png'
         self.icon_size = 0
         self.font_size = 0
+        self.border = 'none'
         self.zoomed_icon_size = 0
         self.image = ''
         self.words = []
         self.timestamp = 0
+        self.related_items = []
+        self.duplicate = False
 
         dict.update(self, vars(self))
         if obj:
@@ -368,11 +393,14 @@ class Data(dict):
     def __hash__(self):
         return hash(self.uid)
 
+    def matches(self, query_words):
+        return True
+
     def is_related_item(self, other):
-        return False
+        return other in self.related_items
 
     def get_related_items(self):
-        return []
+        return self.related_items
 
     def __eq__(self, other):
         return isinstance(other, self.__class__) and self.uid == other.uid
@@ -382,6 +410,9 @@ class Data(dict):
 
     def update_words(self, items):
         pass
+
+    def add_related(self, other):
+        self.related_items.append(other)
 
     def is_duplicate(self, duplicates):
         return False
@@ -415,9 +446,15 @@ class File(Data):
         dict.update(self, vars(self))
         self.set_message_id(path)
 
+    def matches(self, query_words):
+        for word in query_words:
+            if not word in self.filename:
+                return False
+        return True
+
     def same_path(self, path):
-        logging.debug('Same path?', self.path[:len(FILE_DIR)], path)
-        return self.path[:len(FILE_DIR)] == path
+        logger.debug('Same path?', self.path[:len(utils.FILE_DIR)], path)
+        return self.path[:len(utils.FILE_DIR)] == path
 
     def set_message_id(self, path):
         self.message_id = os.path.basename(os.path.dirname(path))
@@ -428,29 +465,33 @@ class File(Data):
                 self.words = item.words
 
 
+item_handlers.update({
+    kind: import_module('importers.%s' % kind) for kind in ITEM_KINDS
+})
 Storage.setup()
 
 if __name__ == '__main__':
-    logging.set_level(logging.INFO)
     if False:
         path = "/Users/laffra/IKKE/gmail/content_type/text-html/kind/gmail/label/activity aler ... n alert limit/message_id/<22f44d4d-ad5a-40f6-83dc-336b2b94294c@xtnvs5mta401.xt.local>/receivers/[/1/laffra@gmail.com/senders/[/1/onlinebanking@ealerts.bankofamerica.com/subject/Activity Alert: Electronic or Online Withdrawal Over Your Chosen Alert Limit/thread/activity aler ... n alert limit - ['laffra@gmail.com', 'onlinebanking@ealerts.bankofamerica.com']/timestamp/1510537596/uid/16455 (UID 92562 RFC822 {25744}.txt"
         for k,v in Storage.resolve_path(path).items():
             if v:
-                logging.debug('%s=%s' % (k,v))
-        logging.debug()
+                logger.debug('%s=%s' % (k, v))
+
+    if False:
+        import cProfile
+        cProfile.run('Storage.search("linkedin", days=10000)', sort="cumulative")
 
     if True:
-        Storage.search('body', days=1)
+        Storage.search('Rowan', days=1)
 
     if False:
         for kind in ['browser','file','gmail','contact']:
-            logging.debug('%s: %d' % (kind, Storage.get_item_count(kind)))
+            logger.debug('%s: %d' % (kind, Storage.get_item_count(kind)))
 
     if False:
         for k,v in Storage.search_contact('messaging-digest-noreply@linkedin.com').items():
             if v:
-                logging.debug('%s=%s' % (k,v))
-        logging.debug()
+                logger.info('%s=%s' % (k, v))
 
 
 

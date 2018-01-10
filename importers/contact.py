@@ -2,8 +2,10 @@ import base64
 import logging
 import quopri
 import re
+from settings import settings
 import storage
 import time
+from urllib.parse import quote
 
 
 NAME_CLEANUP_RE = re.compile('\'')
@@ -25,20 +27,17 @@ def decode(encoded_string):
 def remove_quotes(name):
     return ' '.join(re.sub(NAME_CLEANUP_RE, '', decode(name)).split(', '))
 
-PATH_ATTRIBUTES = {
-    'uid',
-    'email',
-    'label',
-    'names',
-    'phones',
-    'timestamp',
-}
+
+keys = ('uid', 'email', 'label', 'names', 'phones', 'timestamp')
+path_keys = ('label', 'uid', 'icon', 'image', 'words')
 
 def find_contact(email, name='', phones=None, timestamp=None):
     assert email, 'Email missing'
     name = remove_quotes(name)
     email = remove_quotes(email)
     contact = contacts_cache.get(email)
+    if not contact:
+        contact = storage.Storage.search_contact(email)
     if not contact:
         contact = Contact({
             'kind': 'contact',
@@ -51,6 +50,9 @@ def find_contact(email, name='', phones=None, timestamp=None):
         })
         logging.debug('CONTACT: new contact ==> %s %s' % (email, contact.names))
         save_queue.add(contact)
+    if name and not name in contact.names:
+        contact.names.append(name)
+        save_queue.add(contact)
     contacts_cache[email] = contact
     contact.timestamp = timestamp
     return contact
@@ -58,19 +60,24 @@ def find_contact(email, name='', phones=None, timestamp=None):
 
 class Contact(storage.Data):
     def __init__(self, obj):
-        super(Contact, self).__init__(obj['email'], obj)
+        super(Contact, self).__init__(obj.get('email') or obj.get('label'), obj)
+        self.kind = 'contact'
         self.uid = obj['uid'] or obj['email']
-        self.email = obj['email']
+        self.email = obj.get('email')
         self.names = obj.get('names', [])
         self.phones = obj.get('phones',[])
-        self.label = self.names[0] if self.names else self.email
+        if len(self.names) > 1:
+            import collections
+            counter = collections.Counter()
+            counter.update(' '.join(self.names).split(' '))
+            self.name = '%s %s' % counter.most_common(1)[0][0], self.email.split('@')[1]
+        else:
+            self.name = self.names and self.names[0] or self.email
+        self.name = self.name or self.label or self.email
+        self.label = self.name
         self.color = 'purple'
         self.font_size = 14
-        self.name = self.label
-        self.timestamp = obj['timestamp']
-        assert self.email, 'Email missing for %s\nin %s' % (self, obj)
-        assert self.label, 'Label missing for %s\nin %s' % (self, obj)
-        assert self.uid, 'UID missing for %s in\n%s' % (self, obj)
+        self.timestamp = obj.get('timestamp')
         dict.update(self, vars(self))
 
     @classmethod
@@ -86,6 +93,7 @@ class Contact(storage.Data):
 
     def is_duplicate(self, duplicates):
         if self.email in duplicates:
+            self.duplicate = True
             return True
         duplicates.add(self.email)
         return False
@@ -96,12 +104,17 @@ class Contact(storage.Data):
     def __eq__(self, other):
         return isinstance(other, self.__class__) and self.uid == other.uid
 
+    def render(self, query):
+        url = '/?q=%s' % quote(self.label)
+        return '<html><a href="%s">Search in Ikke</a>' % url
+
 
 deserialize = Contact.deserialize
 
 
 def delete_all():
-    return storage.Storage.clear('contact')
+    storage.Storage.clear('contact')
+    settings['contact/count'] = 0
 
 
 def can_load_more():
@@ -112,24 +125,29 @@ def poll():
     pass
 
 
-def history():
-    msg = 'Nothing loaded yet.'
-    count = storage.Storage.get_item_count('contact')
-    if count > 0:
-        msg = '%d contacts were loaded as senders/receivers for gmail messages' % count
-    return msg
+def get_status():
+    count = settings['contact/count']
+    return '%d contacts were loaded as senders/receivers for gmail messages' % count
+
+
+def is_loading():
+    return False
+
+
+def stop_loading():
+    pass
 
 
 def cleanup():
     if save_queue:
         logging.debug('CONTACT: cleanup, save %d contacts' % len(save_queue))
     for n, contact in enumerate(save_queue.copy()):
+        settings.increment('contact/count')
         contact.save()
     save_queue.clear()
 
 
 def test():
-    logging.set_level(logging.DEBUG)
     def test(n, name, email, expected_name, check_name):
         logging.debug('Test', n, repr(name), email, repr(expected_name))
         for k,v in contacts_cache.items():

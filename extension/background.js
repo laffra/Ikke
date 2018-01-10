@@ -25,7 +25,7 @@ chrome.runtime.onMessage.addListener(
     function(request, sender, sendResponse) {
         switch (request.type) {
             case 'track':
-                call('http://localhost:8081/track' +
+                call('http://localhost:1964/track' +
                     '?url=' + encodeURIComponent(request.url) +
                     '&title=' + encodeURIComponent(request.title) +
                     '&image=' + encodeURIComponent(request.image) +
@@ -34,7 +34,8 @@ chrome.runtime.onMessage.addListener(
                     '&keywords=' + encodeURIComponent(request.keywords || ''));
                 break;
             case 'dothis':
-                call('http://localhost:8081/dothis?url=' + encodeURIComponent(request.url), function(response) {
+                console.log('Ikke background: dothis: ' + request.url);
+                call('http://localhost:1964/dothis?url=' + encodeURIComponent(request.url), function(response) {
                     sendResponse(response);
                 });
                 break;

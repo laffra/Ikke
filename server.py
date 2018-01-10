@@ -1,60 +1,81 @@
+from storage import Storage
+
+import compressor
 import dothis
 from importers import browser
+from importers import contact
+from importers import download
+from importers import facebook
+from importers import file
+from importers import gmail
+import installer
 import logging
 import graph
 import poller
+from preferences import ChromePreferences
 from settings import settings
-from storage import Storage
 from http.server import BaseHTTPRequestHandler
 from http.server import HTTPServer
 from socketserver import ThreadingMixIn
 from urllib.parse import parse_qs
-from importlib import import_module
+from urllib.request import urlopen
 import jinja2
 import json
 import os
+import traceback
+import threading
+import utils
 import webbrowser
 
-PORT_NUMBER = 8081
-SERVER_ADDRESS = ('127.0.0.1', PORT_NUMBER)
 
-MAIN_URL = 'http://localhost:%s' % PORT_NUMBER
+logger = logging.getLogger('server')
+
+PORT_NUMBER = 1964
+SERVER_ADDRESS = '127.0.0.1'
 
 
 class Server(BaseHTTPRequestHandler):
     jinja2_env = jinja2.Environment(
-        loader = jinja2.FileSystemLoader(os.path.join(os.path.dirname(graph.__file__), 'html'))
+        loader = jinja2.FileSystemLoader(os.path.join(utils.INSTALL_FOLDER, 'html'))
     )
     graphs = {}
     path = ''
     args = {}
+    preferences = ChromePreferences()
 
     def do_GET(self):
         routes = {
             '/': self.get_index,
             '/clear': self.clear,
-            '/history': self.history,
+            '/stopclear': self.stop_deleting,
+            '/status': self.status,
             '/load': self.load,
             '/stopload': self.stop_loading,
             '/track': self.track,
             '/dothis': self.dothis,
             '/extensions': self.extensions,
             '/get': self.get_resource,
+            '/render': self.render,
             '/open': self.open_local,
             '/settings': self.settings,
-            '/setup': self.handle_setup,
+            '/preparesetup': self.prepare_setup,
+            '/continuesetup': self.continue_setup,
+            '/setupgmail': self.setup_gmail,
+            '/setupfacebook': self.setup_facebook,
             '/jquery.js': self.get_jquery,
             '/search': self.search,
             '/graph': self.get_graph,
             '/poll': self.poll,
+            '/fb': self.fb,
         }
+        logger.debug('GET %s' % self.path)
         self.parse_args()
         routes.get(self.path, self.get_file)()
 
     def log_message(self, format, *args):
         message = format % args
         if not 'search_poll' in message:
-            logging.debug(message)
+            logger.debug(message)
 
     def parse_args(self):
         try:
@@ -68,10 +89,10 @@ class Server(BaseHTTPRequestHandler):
 
     def settings(self):
         html = self.jinja2_env.get_template('settings.html').render({
-            'location': os.path.dirname(os.path.realpath(__file__)),
+            'location': utils.INSTALL_FOLDER,
             'kinds': graph.ALL_ITEM_KINDS[1:],
             'can_load_more': { kind: Storage.can_load_more(kind) for kind in graph.ALL_ITEM_KINDS[1:]},
-            'gmail_needed': 'gu' not in settings,
+            'can_delete': { kind: Storage.can_delete(kind) for kind in graph.ALL_ITEM_KINDS[1:]},
         })
         self.respond(html)
 
@@ -87,42 +108,35 @@ class Server(BaseHTTPRequestHandler):
         try:
             self.wfile.write(message)
         except Exception as e:
-            logging.error('Client went away: %s' % e)
+            logger.error('Client went away: %s' % e)
 
     def get_index(self):
-        if not 'gu' in settings:
-            dothis.activate('myaccount.google.com/apppasswords')
-            return self.settings()
-
         html = self.jinja2_env.get_template('index.html').render({
             'query': self.args.get('q', ''),
             'kinds': graph.ALL_ITEM_KINDS,
             'kinds_string': repr(graph.ALL_ITEM_KINDS),
-            'premium': graph.PREMIUM_ITEM_KINDS,
+            'profile': self.preferences.get_account_info(),
         })
         self.respond(html)
 
     def clear(self):
         kind = self.args.get('kind', '')
-        logging.info('Clearing all history for %s' % kind)
+        logger.info('Clearing all history for %s' % kind)
         if Storage.delete_all(kind):
             self.respond('OK')
 
-    def history(self):
-        kind = self.args.get('kind', '')
-        try:
-            self.respond(json.dumps({
-                'is_loading': Storage.is_loading(kind),
-                'history': Storage.get_history(kind)
-            }), content_type='application/json')
-        except Exception as e:
-            logging.debug('No history for %s' % kind, e)
+    def stop_deleting(self):
+        Storage.stop_deleting(self.args['kind'])
+        self.respond('OK')
+
+    def status(self):
+        self.respond(json.dumps(Storage.get_status()))
 
     def search(self):
         query = self.args.get('q', '')
         settings['query'] = query
         duration = self.args.get('duration', 'year')
-        logging.info('search %s %s' % (duration, query))
+        logger.info('search %s %s' % (duration, query))
         self.graphs[query] = graph.Graph(query, duration)
         self.respond('OK')
 
@@ -134,6 +148,20 @@ class Server(BaseHTTPRequestHandler):
         Storage.load(self.args['kind'])
         self.respond('OK')
 
+    def fb(self):
+        code = self.args.get('code')
+        if code:
+            logger.info('Exchange code for access token')
+            redirect_uri = 'http://localhost:%d/fb' % settings['port']
+            client_secret = settings['facebook/appsecret']
+            client_id = settings['facebook/appid']
+            url = 'https://graph.facebook.com/v2.11/oauth/access_token?client_id=%s&redirect_uri=%s' \
+                   '&client_secret=%s&code=%s' % (client_id, redirect_uri, client_secret, code)
+            logger.info('Load URL: %s' % url)
+            response = json.loads(urlopen(url).read().decode())
+            settings['facebook/access_token'] = response['access_token']
+        self.settings()
+
     def poll(self):
         poller.poll()
 
@@ -141,33 +169,44 @@ class Server(BaseHTTPRequestHandler):
         query = self.args.get('q')
         keep_duplicates = self.args.get('d', '0') == '1'
         kind = self.args['kind']
+        logger.info('get graph for %s: %s', kind, query)
         graph = self.graphs[query].get_graph(kind, keep_duplicates)
-        for node in graph['nodes']:
-            if node['kind'] == 'contact' and node['label'].lower() == query.lower():
-                node['fixed'] = True
         self.respond(json.dumps(graph))
 
     def get_resource(self):
-        path = os.path.join(os.path.join(os.path.dirname(__file__), 'html'), self.args['path'])
-        query = self.args.get('query', '')
-        obj = Storage.resolve_path(path)
-        if obj:
-            handler = import_module('importers.%s' % obj['kind'])
-            if hasattr(handler, 'render'):
-                html = handler.render(handler.deserialize(obj), query)
-                self.respond(html, 'text/html')
-            else:
+        try:
+            path = os.path.join(utils.INSTALL_FOLDER, 'html', self.args['path'])
+            obj = Storage.resolve_path(path)
+            if obj:
                 with open(obj['path'], 'rb') as f:
                     self.respond(f.read())
-        else:
-            self.respond(self.load_resource(path, 'rb'))
+            else:
+                self.respond(self.load_resource(path, 'rb'))
+        except Exception as e:
+            msg = 'Cannot load resource %s due to %s' % (self.args.get('path', '???'), e)
+            logging.error(msg)
+            self.respond(msg)
+            raise
+
+    def render(self):
+        try:
+            item = Storage.load_item(self.args.get('path'))
+            self.respond('<html>%s<p>Key:<pre>%s</pre><p>Value:<pre>%s</pre>' % (
+                item.render(self.args['query']),
+                json.dumps(compressor.deserialize(compressor.serialize(item)), indent=4),
+                json.dumps(item, indent=4)
+            ))
+        except:
+            msg = 'Cannot render: %s' % traceback.format_exc()
+            logging.error(msg)
+            self.respond(msg)
 
     def get_jquery(self):
         self.respond(self.load_resource('jquery.js', 'rb'))
 
     def extensions(self):
         html = self.jinja2_env.get_template('extensions.html').render({
-            'location': os.path.join(os.path.dirname(os.path.realpath(__file__)), 'extension')
+            'location': os.path.join(utils.INSTALL_FOLDER, 'extension')
         })
         self.respond(html)
 
@@ -187,12 +226,34 @@ class Server(BaseHTTPRequestHandler):
     def dothis(self):
         self.respond(dothis.get_work(self.args['url']))
 
-    def handle_setup(self):
-        settings['gu'] = self.args['gu']
-        settings['gp'] = self.args['gp']
-        html = '<script>document.location="/?q=ikke";</script>'
+    def prepare_setup(self):
+        dothis.activate(self.args.get('url'))
+        self.respond('OK')
+
+    def continue_setup(self):
+        url = self.args.get('url')
+        args = self.args.get('args')
+        dothis.activate(url)
+        html = '<script>document.location="https://%s/%s";</script>' % (url, args)
         self.respond(html)
-        poller.poll()
+
+    def setup_gmail(self):
+        settings['gmail/username'] = self.args['gu']
+        settings['gmail/password'] = self.args['gp']
+        html = '<script>document.location="/settings";</script>'
+        threading.Thread(target=lambda: Storage.load('gmail')).start()
+        self.respond(html)
+
+    def setup_facebook(self):
+        if self.args.get('appid'):
+            settings['facebook/appid'] = self.args['appid']
+            settings['facebook/appsecret'] = self.args['appsecret']
+            dothis.activate('developers.facebook.com/apps')
+            url = facebook.get_oauth_url()
+        else:
+            url = facebook.get_login_url()
+        html = '<script>document.location="%s";</script>' % url
+        self.respond(html)
 
     def track(self):
         browser.track(
@@ -213,15 +274,14 @@ class Server(BaseHTTPRequestHandler):
                 pass
             self.respond(payload)
         except Exception as e:
-            logging.error('Fail on %s: %s' % (self.path, e))
+            logger.debug('Fail on %s: %s' % (self.path, e))
             self.send_response(404)
 
     def load_resource(self, filename, format='r'):
         dirname = os.path.dirname(filename).replace(' ', '+')
         basename = os.path.basename(filename)
         filename = os.path.join(dirname, basename)
-        dirpath = os.path.dirname(os.path.realpath(__file__))
-        path = os.path.join(dirpath, os.path.join('html', filename))
+        path = os.path.join(utils.INSTALL_FOLDER, os.path.join('html', filename))
         with open(path, format) as fp:
             return fp.read()
 
@@ -231,10 +291,16 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
 
 
 if __name__ == '__main__':
-    threaded_server = ThreadedHTTPServer(SERVER_ADDRESS, Server)
-    webbrowser.open(MAIN_URL, autoraise=False)
-    poller.start()
-    logging.set_level(logging.INFO)
+    logging.basicConfig(level=logging.INFO)
+    installer.install()
+    port = settings.get('port', PORT_NUMBER)
+    threaded_server = ThreadedHTTPServer(('localhost', port), Server)
+    # poller.start()
+    url = 'http://localhost:%d/settings' % port
+    webbrowser.open(url, autoraise=False)
+    settings['port'] = port
+    if settings['browser/count'] < 100:
+        threading.Thread(target=lambda: Storage.load('browser')).start()
     try:
         threaded_server.serve_forever()
     finally:

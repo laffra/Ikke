@@ -1,4 +1,5 @@
 import datetime
+import json
 import logging
 import os
 from os.path import expanduser
@@ -15,17 +16,9 @@ import storage
 from threadpool import ThreadPool
 
 HISTORY_QUERY_URLS = 'select visit_count, last_visit_time, title, url from urls'
-PATH_ATTRIBUTES = {
-    'kind',
-    'uid',
-    'url',
-    'domain',
-    'image',
-    'favicon',
-    'selection',
-    'label',
-    'timestamp',
-}
+
+keys = ('label', 'uid', 'url', 'domain', 'image', 'icon', 'selection', 'words', 'title', 'timestamp')
+path_keys = ('label', 'uid', 'icon', 'image', 'words')
 
 META_DOMAINS = {
     '//www.google.nl',
@@ -38,7 +31,9 @@ META_DOMAINS = {
     '//adnxs.com',
     '//photos.google.com/search',
     '//linkedin.com/search',
+    '//search.ikke.io',
     '//localhost:',
+    '//127.0.0.1:',
 }
 META_DOMAINS_RE = re.compile('|'.join(META_DOMAINS))
 CLEANUP_URL_PATH_RE = re.compile('\W+')
@@ -47,6 +42,7 @@ MAX_FILENAME_FRACTION = 35
 
 chrome_epoch = datetime.datetime(1601,1,1)
 is_loading_items = False
+logger = logging.getLogger(__name__)
 
 
 def get_history_path():
@@ -67,9 +63,11 @@ def adjust_chrome_timestamp(chrome_timestamp):
 def process_url(rows):
     if rows:
         for n,row in enumerate(rows):
+            if not settings['browser/loading']:
+                break
             visit_count, last_visit_time, title, url = row
             if n % 1000 == 0:
-                logging.debug('Add %s %s' % (title, url))
+                logger.debug('Add %s %s' % (title, url))
             if title:
                 track(url, title, '', get_favicon(url), '', adjust_chrome_timestamp(last_visit_time), force=True)
 
@@ -80,29 +78,25 @@ def get_favicon(url):
 
 
 def track(url, title, image, favicon, selection, timestamp=0, force=False):
-    url = normalize_url(url)
-    parsed_url = urlparse(url)
-    domain = parsed_url.netloc
-    filename = re.sub(CLEANUP_URL_PATH_RE, '+', parsed_url.path[1:])
-    if len(filename) > MAX_FILENAME_LENGTH:
-        filename = filename[:MAX_FILENAME_FRACTION] + '+++' + filename[-MAX_FILENAME_FRACTION:]
-    uid = os.path.join(utils.cleanup_filename(domain), utils.cleanup_filename(filename))
-    if not force and (is_meta_site(url) or not image and not selection):
+    if is_meta_site(url):
         return
-
-    logging.debug('Track %s %s' % (url, image))
-    settings.increment('browser/added', 1)
+    domain = urlparse(url).netloc
+    title = ' '.join(stopwords.remove_stopwords(title))
+    selection = ' '.join(stopwords.remove_stopwords(selection))
+    uid = '#'.join([domain, str(timestamp), title])
+    logger.debug('Track %s %s' % (url, selection))
+    settings.increment('browser/added')
+    settings.increment('browser/count')
     Storage.add_data({
         'kind': 'browser',
         'uid': uid,
         'url': url,
         'domain': domain,
-        'label': title,
+        'label': domain,
         'image': image,
-        'favicon': favicon,
+        'icon': image or favicon,
         'selection': selection,
         'title': title,
-        'words': list(set(word.lower() for word in stopwords.remove_stopwords('%s %s' % (selection, title)))),
         'timestamp': timestamp or utils.get_timestamp()
     })
 
@@ -118,7 +112,7 @@ def load_history():
     cursor.execute(query)
     thread_count = 64
     pool = ThreadPool(thread_count)
-    logging.info('Loading browser history')
+    logger.info('Loading browser history')
     settings['browser/added'] = 0
     settings['browser/when'] = time.time()
     seen = set()
@@ -134,24 +128,13 @@ def load_history():
         pool.add_task(process_url, rows[start: end])
     count = settings['browser/added']
     pool.wait_completion()
-    logging.info('%d urls added with %d threads with chunksize %d.' % (count, thread_count, chunk_size))
-    logging.info(history())
+    logger.info('%d urls added with %d threads with chunksize %d.' % (count, thread_count, chunk_size))
 
 
-def history():
-    count = Storage.get_item_count('browser')
-    if count > 0:
-        try:
-            dt = datetime.datetime.fromtimestamp(settings.get('browser/when'))
-        except:
-            dt = datetime.datetime.now()
-        when = dt.date()
-        return '%d sites loaded from your browser history on %s' % (count, when)
-    return 'Nothing loaded yet.'
-
-
-def can_load_more():
-    return True
+def get_status():
+    count = settings['browser/count']
+    when = datetime.datetime.fromtimestamp(settings.get('browser/when', time.time())).date()
+    return '%d sites loaded from your browser history on %s' % (count, when)
 
 
 def delete_all():
@@ -178,23 +161,23 @@ def is_loading():
 
 class BrowserItem(storage.Data):
     def __init__(self, obj):
-        super(BrowserItem, self).__init__(obj['label'], obj)
-        self.kind = obj.get('kind', 'browser')
-        self.color = 'navy'
-        self.title = self.label = obj.get('label', '')
-        self.uid = obj.get('uid', self.title)
-        self.url = obj['url']
-        self.domain = obj.get('domain', '').replace('www.', '')
-        if self.domain:
-            self.label = self.domain
-        self.image = obj.get('image', '')
+        super(BrowserItem, self).__init__(obj.get('label','???'), obj)
+        self.kind = 'browser'
+        self.uid = obj['uid']
+        self.image = obj.get('image','')
+        self.url = obj.get('url', '')
+        self.domain, self.timestamp, self.title = obj['uid'].split('#')
+        self.label = self.domain
+
         self.selection = obj.get('selection', '')
-        self.icon = self.image or obj.get('favicon', '')
-        self.icon_size = 32 if self.image else 24
+        words = (self.selection + ' ' + self.title).split(' ')
+        self.words = list(set(word.lower() for word in words))
+
+        self.color = 'navy'
+        self.icon = self.image or obj.get('icon', '')
+        self.icon_size = 48 if self.image else 24
         self.font_size = 12
         self.zoomed_icon_size = 256 if self.image else 24
-        words = '%s %s %s' % (self.title, self.selection, self.url)
-        self.timestamp = obj['timestamp']
         self.node_size = 1
         dict.update(self, vars(self))
 
@@ -211,19 +194,21 @@ class BrowserItem(storage.Data):
         if self.words:
             obj['words'] = list(set(self.words + obj['words']))
 
+    def is_related_item(self, other):
+        return False
+
     def is_duplicate(self, duplicates):
         if is_meta_site(self.url):
             return True
-        if self.domain in duplicates:
+        if self.domain != 'facebook.com' and self.domain in duplicates:
             return True
         duplicates.add(self.domain)
         return False
 
-
-def normalize_url(url):
-    while url and url[-1] == '/':
-        url = url[:-1]
-    return url
+    def render(self, query):
+        if not self.url:
+            return 'Error: no url in %s' % json.dumps(self, indent=4)
+        return '<script>document.location=\'%s\';</script>' % self.url
 
 
 def cleanup():
@@ -233,10 +218,16 @@ def cleanup():
 def poll():
     pass
 
+
+settings['browser/can_load_more'] = True
+settings['browser/can_delete'] = True
+
 deserialize = BrowserItem.deserialize
 
-
 if __name__ == '__main__':
-    print(history())
-    # load_history()
+    # print(history())
+    logging.basicConfig(level=logging.INFO)
+    load_history()
+    for n,obj in enumerate(Storage.search('reddit', days=100000)):
+        logger.info('Result %d: %s', n, json.dumps(obj, indent=4))
 

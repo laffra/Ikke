@@ -1,6 +1,7 @@
 import importers
 import logging
 import pkgutil
+import storage
 import time
 import threading
 
@@ -34,6 +35,8 @@ class Worker(threading.Thread):
                 logging.debug('Polling %s' % self.importer.__name__)
             except Exception as e:
                 logging.error('POLLER: Error polling %s: %s' % (self.importer.__name__, e))
+            logging.info('Polling Storage')
+            storage.Storage.poll()
 
     def stop(self):
         self.running = False
