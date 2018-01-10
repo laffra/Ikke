@@ -8,7 +8,8 @@ var TOP_HEIGHT = 250;
 var ALPHA_INITIAL = 0.5
 var ALPHA_WARMUP = 0.05
 var ALPHA_SHAKE = 0.1
-var ALPHA_DRAG = 0.1
+var ALPHA_DRAG = 0.0001
+var ALPHA_DRAG_START = 0.1
 var ALPHA_WARMUP_COUNT = 7
 
 function init_tabs() {
@@ -152,7 +153,8 @@ function load_grid(kind, w, h) {
         clear_spinner(kind, error, graph);
         update_summary(kind, graph);
         if (graph.nodes.length) {
-            var table = $('<table class="ui-table">').appendTo($('#tabs-' + kind).children().first());
+            $('#tabs-' + kind + ' .ui-table').remove()
+            var table = $('<table class="ui-table">').appendTo($('#tabs-' + kind + ' .tab-contents'));
             table.append($('<tr>').append([
                 $('<th colspan=2>').text('Title'),
                 $('<th>').text('Date'),
@@ -160,28 +162,36 @@ function load_grid(kind, w, h) {
             ]));
         }
         var sorted_nodes = graph.nodes.sort(function compare(a, b) {
-            return a.kind < b.kind ? 1 : -1;
-        });
-        $.each(sorted_nodes, function(index, node) {
-            if (node.kind == kind || (kind == 'all' && node.kind != 'label')) {
-                table.append($('<tr>')
-                    .on("click", function() {
-                        var row = $(this);
-                        launch(row.attr('kind'), row.attr('label'), row.attr('url'), row.attr('path'));
-                    })
-                    .attr('kind', node.kind)
-                    .attr('label', node.label)
-                    .attr('url', node.url)
-                    .attr('path', node.path)
-                    .append([
-                        $('<td width=20>').append(
-                            $('<img>').attr('src', node.icon).css('width', '16px')
-                        ),
-                        $('<td>').text(node.url || node.subject || node.label),
-                        $('<td>').html(nobreaks(node.date)),
-                        $('<td>').html(nobreaks(node.senders && node.senders[0].label || '')),
+        return a.kind < b.kind ? 1 : -1;
+    });
+    function get_icon(node) {
+        return node.kind == 'contact' ? 'get?path=icons/person-icon.png' : node.icon;
+    }
+    $.each(sorted_nodes, function(index, node) {
+        if (node.kind == kind || (kind == 'all' && node.kind != 'label')) {
+            table.append($('<tr>')
+                .on("click", function() {
+                    var row = $(this);
+                    launch(row.attr('label'), row.attr('path'));
+                })
+                .attr('kind', node.kind)
+                .attr('label', node.label)
+                .attr('url', node.url)
+                .attr('path', node.path)
+                .append([
+                    $('<td width=10>').append(
+                        $('<img class="grid-icon">').attr('src', get_icon(node)).css('width', '16px')
+                    ),
+                    $('<td>').html(node.url || node.subject || (node.kind == 'contact' ? '<i>Contact:</i> ' : ' ') + node.label),
+                    $('<td>').html(nobreaks((node.date || '').split(' ')[0])),
+                    $('<td>').html(nobreaks(node.persons.map(x => x.label).join(', ')))
                     ]));
+            } else {
+              console.log('skip grid: ' + node.kind + ' ' + node.label)
             }
+        })
+        $('.grid-icon').on('error', function() {
+            $(this).attr('src', "get?path=icons/browser-web-icon.png");
         })
     });
 }
@@ -214,10 +224,10 @@ function update_summary(kind, graph) {
     }[get_preference("duration") || 'month'];
 
     var count = graph.nodes.filter(function(node) { return node.kind != 'label'; }).length;
-    var stats = JSON.parse(graph.stats);
+    var stats = graph.stats;
     var removed = !stats.removed ? '' :
         ', with <a href=# class="removed-' + kind + '">' + stats.removed + ' similar results</a> removed,';
-    $('#summary-' + kind).append(
+    $('#summary-' + kind).empty().append(
         $('<span>').text('Showing ' + count + ' results for '),
         $('<span>')
             .addClass('select-wrapper')
@@ -256,14 +266,14 @@ function update_summary(kind, graph) {
         $(".zoom-buttons")
             .css('display', "inline-block");
     }
-    $('#node-count').text('N:' + graph.nodes.length);
+    $('#dashboard-node-count').text('N:' + graph.nodes.length);
     size_selects();
 }
 
 function load_graph(kind, w, h) {
     var force = d3.forceSimulation()
-            .force("link", d3.forceLink().distance(10).strength(3))
-            .force("x", d3.forceX(w/2).strength(0.3))
+            .force("link", d3.forceLink().distance(1).strength(1))
+            .force("x", d3.forceX(w/2 - 96).strength(0.3))
             .force("y", d3.forceY(h/2).strength(2.5))
             .force("charge", d3.forceManyBody().strength(1))
             .alpha(ALPHA_INITIAL)
@@ -284,7 +294,7 @@ function load_graph(kind, w, h) {
         current_zoom_scale = d3.event.transform.k;
         g.style("stroke-width", 1.5 / d3.event.transform.k + "px");
         g.attr("transform", d3.event.transform);
-        $('#zoom-scale').text('Z:' + current_zoom_scale);
+        $('#dashboard-zoom-scale').text('Z:' + Number(current_zoom_scale).toFixed(2));
     }
 
     d3.selectAll('#zoom-in-' + kind).on('click', function() {
@@ -299,7 +309,14 @@ function load_graph(kind, w, h) {
         svg.attr("width", w - 2 * $('.logo').width() - 96)
            .attr("height", h + TOP_HEIGHT);
         clear_spinner(kind, error, graph);
-
+        $('#dashboard-memory').text('M:' + graph.stats.memory);
+        $('#dashboard-items-read').text('R:' + (graph.stats.items_read || 0));
+        $('#dashboard-results').text('#F:' + (graph.stats.results || 0));
+        $('#dashboard-raw-results').text('#R:' + (graph.stats.raw_results || 0));
+        $('#dashboard-search-time').text('tS:' + Number((graph.stats.search_time || 0)).toFixed(1) + 's');
+        $('#dashboard-resolve-time').text('tR:' + Number((graph.stats.resolve_time || 0)).toFixed(1) + 's');
+        $('#dashboard-files').text('F:' + (graph.stats.files || 0));
+        $('#dashboard-searches').text('S:' + (graph.stats.searches || 0));
         update_summary(kind, graph);
 
         zoom.scaleTo(svg, current_zoom_scale = Math.min(1, Math.min(w,h)/graph.nodes.length/15));
@@ -337,15 +354,14 @@ function load_graph(kind, w, h) {
             if (d.kind !== 'label') {
                 d3.select(selectId(d, 'border'))
                     .transition()
-                    .style("stroke", "#555")
-                    .style("stroke-width", "4px")
+                    .style("stroke", "#ddd")
+                    .style("stroke-width", "2px")
                     .attr("x", function(d) { return -d.zoomed_icon_size/2 - 2; })
                     .attr("y", function(d) { return -d.zoomed_icon_size/2 - 2; })
                     .attr("width", function(d) { return d.icon_size > 32 ? d.zoomed_icon_size + 4 : 0; })
                     .attr("height", function(d) { return d.zoomed_icon_size + 4; })
                 d3.select(selectId(d, 'text'))
                     .text(function(d) {
-                        console.log('"' + d.url + '"');
                         return (d.title || d.label)
                             .replace(/\?.*/, '')
                             .replace(/https+:\/\/[^\/]*\//, '')
@@ -367,19 +383,26 @@ function load_graph(kind, w, h) {
             if (d.kind !== 'label') {
                 d3.select( this )
                     .transition()
+                    .duration(1000)
                     .attr("x", function(d) { return -d.icon_size/2; })
                     .attr("y", function(d) { return -d.icon_size/2; })
                     .attr("width", function(d) { return d.icon_size; })
                     .attr("height", function(d) { return d.icon_size; })
                 d3.select(selectId(d, 'text'))
-                    .text(function(d) { return d.label; })
                     .transition()
+                    .duration(500)
                     .attr("y", function(d) { return d.font_size + d.icon_size/2; })
-                    .style("font-size", function(d) { return d.font_size + 'px'; });
+                    .style("font-size", 0)
+                setTimeout(function() {
+                    d3.select(selectId(d, 'text'))
+                        .transition()
+                        .duration(100)
+                        .text(function(d) { return d.label; })
+                        .style("font-size", function(d) { return d.font_size + 'px'; });
+                }, 500);
                 d3.select(selectId(d, 'border'))
                     .transition()
-                    .style("fill", "white")
-                    .style("stroke", "#555")
+                    .duration(1000)
                     .style("stroke-width", "1px")
                     .attr("x", function(d) { return -d.icon_size/2; })
                     .attr("y", function(d) { return -d.icon_size/2; })
@@ -400,7 +423,7 @@ function load_graph(kind, w, h) {
         }
 
         function dragstarted(d) {
-            shake(ALPHA_DRAG);
+            shake(ALPHA_DRAG_START);
             d.fx = d.x;
             d.fy = d.y;
         }
@@ -408,6 +431,7 @@ function load_graph(kind, w, h) {
         function dragged(d) {
             d.fx = d3.event.x;
             d.fy = d3.event.y;
+            shake(ALPHA_DRAG);
         }
 
         function dragended(d) {
@@ -424,7 +448,8 @@ function load_graph(kind, w, h) {
             .enter()
             .append("line")
             .attr("class", "link")
-            .style("stroke-width", function(l) { return l.stroke; })
+            .style("stroke-opacity", 0.25)
+            .style("stroke-width", 2)
             .style("stroke", function(l) { return l.color; })
 
         var node = g.selectAll(".node")
@@ -442,7 +467,7 @@ function load_graph(kind, w, h) {
         node.append("svg:rect")
             .attr("id", function(d) { return getId(d, 'border'); })
             .style("fill", "white")
-            .style("stroke", "#555")
+            .style("stroke", "#ddd")
             .style("stroke-width", "1px")
             .attr("x", function(d) { return -d.icon_size/2; })
             .attr("y", function(d) { return -d.icon_size/2; })
@@ -479,11 +504,17 @@ function load_graph(kind, w, h) {
         node.on("mouseenter", function() { d3.select(this).raise(); });
 
         node.on('mouseover', function(d) {
-            link.style('stroke-width', function(l) { return (d === l.source || d === l.target) ? 4 : l.stroke })
+            link.transition()
+                .duration(300)
+                .style('stroke-opacity', function(l) { return (d === l.source || d === l.target) ? 1 : 0.25 })
+                .style('stroke-width', function(l) { return (d === l.source || d === l.target) ? 4 : 2 })
                 .style('stroke', function(l) { return (d === l.source || d === l.target) ? '#666' : l.color });
         })
         node.on('mouseout', function(d) {
-            link.style('stroke-width', function(l) { return l.stroke; })
+            link.transition()
+                .duration(1000)
+                .style('stroke-opacity', 0.25)
+                .style('stroke-width', 2)
                 .style("stroke", function(l) { return l.color; })
         });
 
@@ -498,7 +529,7 @@ function load_graph(kind, w, h) {
 
 
         node.on("click", function(d) {
-            launch(d.kind, d.label, d.url, d.path);
+            launch(d.label, d.path);
         });
 
         force.on("tick", function() {
@@ -536,30 +567,11 @@ function load_graph(kind, w, h) {
     });
 }
 
-function launch(kind, label, url, path) {
-    function replace(url) {
-        $(document.body)
-            .css('background', 'white')
-            .html('<img src="get?path=icons/loading_spinner.gif" class="spinner">');
-        document.location = url;
-    }
-    switch (kind) {
-        case "label":
-        case "contact":
-            set_preference("query", label);
-            replace("/?q=" + label);
-            break
-        case "browser":
-        case "google":
-            replace(url);
-            break;
-        case "file":
-        case "gmail":
-            window.open("/get?query=" + localStorage.query + "&path=" + path);
-            break;
-        default:
-            alert('Internal error: Unknown node: ' + kind);
-            break;
+function launch(label, path) {
+    if (path) {
+        window.open("/render?query=" + localStorage.query + "&label=" + label + "&path=" + (path || ''));
+    } else {
+        document.location = "/?q=" + label;
     }
 }
 

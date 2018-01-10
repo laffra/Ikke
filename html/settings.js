@@ -1,103 +1,101 @@
 $('#ikke-gmail-needed').css('display', 'none');
 
 function setup_gmail() {
-    document.location = 'https://myaccount.google.com/apppasswords';
+    $.get('/setup_google', function(response) {
+        document.location = 'https://myaccount.google.com/apppasswords';
+    });
+}
+
+function setup_facebook() {
+    var url = 'developers.facebook.com/quickstarts';
+    $.get('/preparesetup?url=' + url, function(response) {
+        document.location = 'https://developers.facebook.com/quickstarts/?platform=web';
+    });
 }
 
 function check_history() {
-    $('.history').each(function() {
-        var span = $(this);
-        var kind = span.closest('tr').attr('kind');
-        var load_button = $('#load-button-' + kind);
-        var clear_button = $('#clear-button-' + kind);
-        var spinner = $('#spinner-' + kind);
-        $.getJSON('/history?kind=' + kind, function(response) {
-            span.text(response.history);
-            load_button.css('visibility', 'visible');
-            clear_button.css('visibility', 'visible');
-            if (response.is_loading) {
-                load_button.addClass('loading');
-                load_button.text('Stop loading');
-                spinner.css('visibility', 'visible');
-            } else {
-                load_button.removeClass('loading');
-                load_button.text('Load more');
-                spinner.css('visibility', 'hidden');
-                clear_button.attr('disabled', false);
+    $.getJSON('/status', function(response) {
+        $('.history').each(function() {
+            var span = $(this);
+            var kind = span.closest('tr').attr('kind');
+            var load_button = $('#load-button-' + kind);
+            var stop_load_button = $('#stop-load-button-' + kind);
+            var clear_button = $('#clear-button-' + kind);
+            var stop_clear_button = $('#stop-clear-button-' + kind);
+            var spinner = $('#spinner-' + kind);
+            var status = response[kind]
+            var running = status.loading || status.deleting;
+            span.text(status.history);
+            spinner.css('visibility', running ? 'visible' : 'hidden');
+            load_button.css('display', status.loading ? 'none' : 'block');
+            stop_load_button.css('display', status.loading ? 'block' : 'none');
+            clear_button.css('display', status.count == 0 || status.deleting ? 'none' : 'block');
+            stop_clear_button.css('display', status.count > 0 && status.deleting ? 'block' : 'none');
+            if (status['pending']) {
+                $('.nopending-' + kind).css('display', 'none')
+                span.text('Please click the Setup button').css('color', 'red');
             }
         })
-        .fail(function() {
-            span.text('No history for ' + kind);
-            spinner.css('visibility', 'hidden');
-            load_button.css('visibility', 'hidden');
-            clear_button.css('visibility', 'hidden');
-        })
+        setTimeout(check_history, 1000);
+    })
+    .fail(function() {
+        span.text('No history for ' + kind);
+        spinner.css('visibility', 'hidden');
+        load_button.css('visibility', 'hidden');
+        clear_button.css('visibility', 'hidden');
+        setTimeout(check_history, 10000);
     })
 }
 
-setInterval(check_history, 3000);
 check_history();
-
-$('.clear-button').click(function() {
-    var clear_button = $(this);
-    var kind = clear_button.closest('tr').attr('kind');
-    var spinner = $('#spinner-' + kind);
-    var history = $('#history-' + kind);
-    spinner.css('visibility', 'visible');
-    clear_button.attr('disabled', true);
-    $.get('/clear?kind=' + kind, function() {
-        })
-        .fail(function(error) {
-            history.text('Error clearing ' + kind);
-        })
-        .done(function(error) {
-            spinner.css('visibility', 'hidden');
-        });
-});
 
 $('.logo').click(function() {
     document.location = '/';
 });
 
 $('.load-button').click(function() {
-    var button = $(this);
-    var kind = button.closest('tr').attr('kind');
-    $('#spinner-' + kind).css('visibility', 'visible');
-    if (button.text() === 'Load more') {
-        $.get('/load?kind=' + kind)
-            .fail(function(error) {
-                $('#history-' + kind).text('Could not load more items ' + kind);
-            });
-    } else {
-        $.get('/stopload?kind=' + kind)
-            .fail(function(error) {
-                $('#history-' + kind).text('Could not stop loading ' + kind);
-            });
-    }
-    check_history();
+    var kind = $(this).closest('tr').attr('kind');
+    $.get('/load?kind=' + kind)
+        .fail(function(error) {
+            $('#history-' + kind).text('Could not load more items, ' + error);
+        }
+    );
+});
+
+$('.stop-load-button').click(function() {
+    var kind = $(this).closest('tr').attr('kind');
+    $.get('/stopload?kind=' + kind)
+        .fail(function(error) {
+            $('#history-' + kind).text('Could not stop loading, ' + error);
+        }
+    );
+});
+
+$('.clear-button').click(function() {
+    var kind = $(this).closest('tr').attr('kind');
+    $.get('/clear?kind=' + kind)
+        .fail(function(error) {
+            $('#history-' + kind).text('Could not clear items, ' + error);
+        }
+    );
+});
+
+$('.stop-clear-button').click(function() {
+    var kind = $(this).closest('tr').attr('kind');
+    $.get('/stopclear?kind=' + kind)
+        .fail(function(error) {
+            $('#history-' + kind).text('Could not stop deleting, ' + error);
+        }
+    );
 });
 
 function setup_extension() {
-  console.log('set up extension');
-  chrome.webstore.install(
-    'https://chrome.google.com/webstore/detail/fmeadohikadcafhjaijonglpjdnncnal',
-    function ok() {
-      document.location.reload();
-    },
-    function fail(detail) {
-      alert('Installation from Chrome webstore failed. Please use the local install option.');
-      $('#ikke-extension').attr('disabled', true);
-      $('#ikke-extension_local').attr('disabled', false);
-    }
-  );
+    window.open("http://chrislaffra.com/ikke/extension.html", '_blank');
 }
 
-function setup_extension_local() {
-  document.location = '/extensions';
-}
-
-setTimeout(function() {
-  $('#ikke-extension').css('opacity', 0);
-});
-
+setInterval(function() {
+  if ($('#ikke-extension').css('display') == 'block') {
+    document.location.reload();
+  }
+}, 30000)
 

@@ -10,6 +10,18 @@
         <script src="3rd/d3.v4.min.js"></script>
     </head>
     <body>
+        <div id="dashboard">
+            <span id="dashboard-node-count"></span>
+            <span id="dashboard-zoom-scale"></span>
+            <span id="dashboard-memory"></span>
+            <span id="dashboard-items-read"></span>
+            <span id="dashboard-results"></span>
+            <span id="dashboard-raw-results"></span>
+            <span id="dashboard-search-time"></span>
+            <span id="dashboard-resolve-time"></span>
+            <span id="dashboard-files"></span>
+            <span id="dashboard-searches"></span>
+        </div>
         <table id="main" width="100%">
             <tr>
                 <td class="logo">
@@ -24,9 +36,9 @@
                             <input type="text" id="query" class="searchbox" value="{{query}}" onchange="rerender()"/>
                             <div class="search-button">&#9906;</div>
                         </div>
-                        <div id="dashboard">
-                            <span id="node-count"></span>
-                            <span id="zoom-scale"></span>
+                        <div class="profile">
+                            <img src="{{profile['picture_url']}}">
+                            <div>{{profile['full_name']}}</div>
                         </div>
                     </div>
                     <div id="tabs">

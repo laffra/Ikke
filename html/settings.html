@@ -14,22 +14,20 @@
 </div>
 <span class="title">Settings</span>
 
+
 <div id="ikke-extension">
-    Setup Step 1: <button onclick="setup_extension_local()">Enable the extension</button>
+    <button onclick="setup_extension()">Install the Extension</button>
 </div>
 
-{% if gmail_needed %}
-<div id="ikke-gmail-needed">
-    Setup Step 2: <button onclick="setup_gmail()">Set up gmail</button>
-</div>
-{% else %}
+
 <div id="ikke-settings">
     <table>
         <tr>
             <th>Kind</th>
+            <th>Setup</th>
+            <th>Delete</th>
+            <th>Add</th>
             <th>Status</th>
-            <th>Cleanup</th>
-            <th>Add more</th>
             <th></th>
         </tr>
     {% for kind in kinds %}
@@ -38,33 +36,32 @@
                 <span class="name">{{kind.upper()}}</span>
             </td>
             <td>
+                {% if kind in ['gmail', 'facebook'] %}
+                <button onclick="setup_{{kind}}()">Setup</button>
+                {% endif %}
+            </td>
+            <td>
+                <button class='clear-button nopending-{{kind}}' id="clear-button-{{kind}}">Delete</button>
+                <button class='stop-clear-button nopending-{{kind}} orange hidden' id="stop-clear-button-{{kind}}">Stop deleting</button>
+            </td>
+            <td>
+                {% if can_load_more[kind] %}
+                    <button class="load-button nopending-{{kind}}" id="load-button-{{kind}}">Load</button>
+                    <button class='stop-load-button nopending-{{kind}} orange hidden' id="stop-load-button-{{kind}}">Stop loading</button>
+                {% endif %}
+            </td>
+            <td>
                 <span class="history"><i>calculating...</i></span>
             </td>
             <td>
-                <button class='clear-button' id="clear-button-{{kind}}">
-                    Delete all
-                </button>
-            </td>
-            <td>
-                {% if can_load_more[kind] %}
-                    <button class="load-button" id="load-button-{{kind}}">Load more</button>
-                {% else %}
-                    &nbsp;
-                {% endif %}
-            </td>
-            <td>
-                {% if can_load_more[kind] %}
-                    <img id="spinner-{{kind}}" src="get?path=icons/loading_spinner.gif" class="spinner">
-                {% else %}
-                    &nbsp;
-                {% endif %}
+                <img id="spinner-{{kind}}" src="get?path=icons/loading_spinner.gif" class="spinner">
             </td>
         </tr>
     {% endfor %}
     </table>
 </div>
-{% endif %}
-
+<pre id="debug">
+</pre>
 <script src="settings.js"></script>
 
 </body>

@@ -21,7 +21,7 @@ image {
 }
 
 .logo {
-    padding: 18px 15px;
+    padding: 9px 15px;
     font-family: Arial;
     vertical-align: top;
     font-weight: bold;
@@ -77,6 +77,29 @@ svg {
     border-radius: 2px;
     box-shadow: 0 2px 2px 0 rgba(0,0,0,0.16), 0 0 0 1px rgba(0,0,0,0.08);
     transition: box-shadow 200ms cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+.profile {
+    display: block;
+    float: right;
+    vertical-align: top;
+}
+
+.profile img {
+    width: 32px;
+    margin-top: 7px;
+    opacity: .9;
+    border-radius: 50%;
+}
+
+.profile div {
+    position: absolute;
+    top: 37px;
+    right: 162px;
+    color: #bbb;
+    font-family: Arial;
+    font-size: 16px;
+    height: 18px;
 }
 
 .filter {
@@ -318,7 +341,7 @@ table.ui-table {
 table.ui-table th, table.ui-table td {
     cursor: pointer;
     border-bottom: 1px solid #ddd;
-    padding: 3px;
+    padding: 3px 19px 3px 3px;
     text-align: left;
     vertical-align: top;
 }
@@ -348,11 +371,14 @@ table.ui-table tr:hover {
 }
 
 #dashboard {
-    margin: 10px;
+    position: absolute;
+    top: -7px;
+    left: 10px;
+    opacity: .3;
 }
 
 #dashboard span {
-    font-size: 12px;
+    font-size: 9px;
     margin: 0 2px;
 }
 

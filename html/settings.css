@@ -3,7 +3,7 @@ body {
 }
 
 button {
-    background: lightgreen;
+    background: #4CAF50;
     border: 1px solid grey;
     padding: 5px;
     cursor: pointer;
@@ -12,27 +12,52 @@ button {
     text-align: center;
     font-weight: bold;
     height: 24px;
+    margin: 4px 0;
+    color: #f2eeee;
+    border-radius: 3px;
 }
 
-button.loading {
-    background: pink;
+.hidden {
+    display: none;
 }
 
 button:focus {
     outline: none;
 }
 
+.stop-clear-button {
+    background: orange;
+}
+
+.orange {
+    background: orange;
+}
+
+.orange:hover {
+    background: red;
+}
+
 button:hover {
-    border: 3px solid blue;
-    padding: 1px;
+    background: #336034;
+    color: white;
 }
 
 button:disabled {
-    background: pink;
+    background: grey;
 }
 
 #ikke-extension {
-    opacity: 0;
+    margin-top: 43px;
+    display: block;
+}
+
+#ikke-extension button {
+    width: 150px;
+    background-color: #ffa700;
+}
+
+#ikke-extension button:hover {
+    background-color: #dd9000;
 }
 
 table {
@@ -66,8 +91,8 @@ span.name {
 
 .spinner {
     visibility: hidden;
-    width: 32px;
-    height: 32px;
+    width: 24px;
+    height: 24px;
 }
 
 
@@ -112,3 +137,10 @@ span.name {
     font-size: 18px;
 }
 
+#ikke-settings {
+    border: 2px solid grey;
+    border-width: 2px 0 0 0 ;
+    margin-top: 15px;
+    padding-top: 15px;
+    display: none;
+}
