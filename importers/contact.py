@@ -3,6 +3,7 @@ import logging
 import quopri
 import re
 from settings import settings
+import stopwords
 import storage
 import time
 from urllib.parse import quote
@@ -44,6 +45,7 @@ def find_contact(email, name='', phones=None, timestamp=None):
             'uid': email,
             'email': email,
             'label': name,
+            'words': stopwords.remove_stopwords(name),
             'names': [name] if name else [],
             'timestamp': timestamp or time.time(),
             'phones': phones or [],
@@ -70,7 +72,7 @@ class Contact(storage.Data):
             import collections
             counter = collections.Counter()
             counter.update(' '.join(self.names).split(' '))
-            self.name = '%s %s' % counter.most_common(1)[0][0], self.email.split('@')[1]
+            self.name = '%s %s' % (counter.most_common(1)[0][0], self.email.split('@')[1])
         else:
             self.name = self.names and self.names[0] or self.email
         self.name = self.name or self.label or self.email
@@ -147,41 +149,12 @@ def cleanup():
     save_queue.clear()
 
 
-def test():
-    def test(n, name, email, expected_name, check_name):
-        logging.debug('Test', n, repr(name), email, repr(expected_name))
-        for k,v in contacts_cache.items():
-            logging.debug('   cached:', k, v.names)
-        contact = find_contact(email, name)
-        logging.debug('   Contact names are %s %s' % (contact.name, contact.names))
-        if check_name:
-            assert expected_name in contact.names, 'Name %s not in %s' % (expected_name, contact.names)
-            logging.debug('   Found the right name')
-        import json
-        json.dumps(contact)
-        logging.debug()
-        return contact
-
-    email = 'laffra@gmail.com'
-
-    c1 = test(1, '', email, 'Chris Laffra', False)
-    c2 = test(2, 'Johannes Laffra', email, 'Johannes Laffra', True)
-    c3 = test(3, 'Chris Laffra', email, 'Chris Laffra', True)
-    c4 = test(4, '', email, 'Chris Laffra', True)
-
-    assert hash(c1) == hash(c2), 'c1 and c2 are not equal'
-    assert c1 == c2, 'c1 and c2 are not equal'
-
-    logging.debug('cache:', len(contacts_cache))
-    logging.debug('save queue:', len(save_queue))
-    logging.debug(storage.Storage.stats.items())
-
-    cleanup()
-
-    logging.debug('cache:', len(contacts_cache))
-    logging.debug('save queue:', len(save_queue))
-    logging.debug(storage.Storage.stats.items())
-
-
 if __name__ == '__main__':
-    test()
+    import os
+    import utils
+    for _,_,files in os.walk(utils.CONTACT_DIR):
+        for n,file in enumerate(files):
+            item = storage.Storage.resolve_path(os.path.join(utils.CONTACT_DIR, file))
+            item.words = stopwords.remove_stopwords(item.name)
+            if n%100==0: print(n, item.words)
+    #test()
