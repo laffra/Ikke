@@ -167,7 +167,7 @@ def get_text(obj):
     if isinstance(obj, str):
         return obj
     elif isinstance(obj, dict):
-        return ' '.join(map(get_text, [value for key,value in obj.items() if key != 'id']))
+        return ' '.join(map(get_text, [value for key,value in obj.items() if key not in ['uid', 'id']]))
     else:
         return ''
 

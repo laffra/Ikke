@@ -12,6 +12,7 @@ HOME_DIR = os.path.join(os.path.expanduser('~'), 'IKKE')
 HOME_DIR_SEGMENT_COUNT = len(HOME_DIR.split(os.path.pathsep))
 ITEMS_DIR = os.path.join(HOME_DIR, 'items')
 FILE_DIR = os.path.join(ITEMS_DIR, 'file')
+CONTACT_DIR = os.path.join(ITEMS_DIR, 'contact')
 
 os.chdir(INSTALL_FOLDER)
 

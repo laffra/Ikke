@@ -9,6 +9,7 @@ import shutil
 import stat
 import stopwords
 import subprocess
+import traceback
 import utils
 import time
 from collections import defaultdict
@@ -185,9 +186,9 @@ class Storage:
                         person = contact.deserialize(compressor.deserialize(f.read()))
                         person.path = person['path'] = path
                     except:
-                        logger.error('Could not deserialize %s', path)
+                        logger.error('Could not deserialize %s: %s', path, traceback.format_exc())
             else:
-                logger.error('Contact not found: %s', path)
+                logger.debug('Contact not found: %s', path)
             cls.search_cache[email] = person
         return person
 

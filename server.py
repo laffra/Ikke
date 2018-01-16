@@ -199,7 +199,7 @@ class Server(BaseHTTPRequestHandler):
         except:
             msg = 'Cannot render: %s' % traceback.format_exc()
             logging.error(msg)
-            self.respond(msg)
+            self.respond(self.get_resource())
 
     def get_jquery(self):
         self.respond(self.load_resource('jquery.js', 'rb'))

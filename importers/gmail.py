@@ -188,7 +188,10 @@ class GMail():
             for n,response in enumerate(responses):
                 self.id_cache[message_ids[n]] = True
                 try:
-                    self.parse_message(part.decode('utf8', errors='ignore') for part in response)
+                    self.parse_message(
+                        [part.decode('utf8', errors='ignore') for part in response],
+                        sent=connection == self.sent
+                    )
                 except Exception as e:
                     logger.error('Cannot handle response due to %s' % e)
                     logger.error('Response: %s', response)
@@ -220,7 +223,7 @@ class GMail():
             if email_address
         ]
 
-    def parse_message(self, response):
+    def parse_message(self, response, sent):
         uid, data = response
         msg = email.message_from_string(data)
         msg['uid'] = uid
@@ -228,7 +231,8 @@ class GMail():
         timestamp = self.get_timestamp(msg.get('Received', msg.get('Date')).split(';')[-1].strip())
         content_type, url_domains, body = self.get_body(msg)
         label, words, rest = self.parse_email_text(subject, body)
-        persons = self.get_persons(timestamp, msg.get('From', ''), msg.get('To', ''), msg.get('Cc', ''))
+        who = msg.get('To') if sent else msg.get('From')
+        persons = self.get_persons(timestamp, who)
         emails = [person.email for person in persons]
         names = [person.name for person in persons]
         thread = '%s - %s' % (label, emails)
@@ -405,7 +409,7 @@ if __name__ == '__main__':
     # settings.clear()
     # load(1, 0, True)
     # load(3650, 0, True)
-    GMail.load(3, 0)
+    GMail.load(8, 7)
     # logging.info('History: %s' % history())
     # poll()
 
