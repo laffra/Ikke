@@ -35,7 +35,6 @@ def get_work(url):
 
 
 tasks = {
-    'myaccount.google.com/apppasswords': jinja2_env.get_template('google.html').render({}),
     'developers.facebook.com/apps': jinja2_env.get_template('facebook_apps.html').render({}),
     'developers.facebook.com/quickstarts': jinja2_env.get_template('facebook_quickstart.html').render({}),
     'settings/searchEngines': jinja2_env.get_template('search_engines.html').render({}),

@@ -24,7 +24,6 @@
     <table>
         <tr>
             <th>Kind</th>
-            <th>Setup</th>
             <th>Delete</th>
             <th>Add</th>
             <th>Status</th>
@@ -34,11 +33,6 @@
         <tr class="setting" kind='{{kind}}'>
             <td>
                 <span class="name">{{kind.upper()}}</span>
-            </td>
-            <td>
-                {% if kind in ['gmail', 'facebook'] %}
-                <button onclick="setup_{{kind}}()">Setup</button>
-                {% endif %}
             </td>
             <td>
                 <button class='clear-button nopending-{{kind}}' id="clear-button-{{kind}}">Delete</button>
@@ -62,6 +56,7 @@
 </div>
 <pre id="debug">
 </pre>
+
 <script src="settings.js"></script>
 
 </body>

@@ -1,3 +1,4 @@
+import base64
 from collections import Counter
 from importers import contact
 from cache import Cache
@@ -7,10 +8,12 @@ import email.header
 import email.utils
 import htmlparser
 import imaplib
+import json
 import logging
 from preferences import ChromePreferences
 from settings import settings
 import os
+import pickle
 import re
 import stopwords
 import storage
@@ -18,6 +21,9 @@ import time
 import traceback
 import utils
 from urllib.parse import urlparse
+from googleapiclient.discovery import build
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
 
 
 MAXIMUM_DAYS_LOAD = 3650
@@ -26,6 +32,7 @@ URL_MATCH_RE = re.compile('https?://[\w\d:#@%/;$()~_?\+-=\.&]*')
 DATESTRING_RE = re.compile(' [-+].*')
 CLEANUP_FILENAME_RE = re.compile('[<>@]')
 MY_EMAIL_ADDRESS = ChromePreferences().get_email()
+SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
 
 keys = (
     'uid', 'message_id', 'senders', 'ccs', 'receivers', 'thread',
@@ -38,63 +45,67 @@ path_keys = (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def get_gmail_service():
+    creds = None
+    if os.path.exists('token.pickle'):
+        with open('token.pickle', 'rb') as token:
+            creds = pickle.load(token)
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file('importers/gmail_credentials.json', SCOPES)
+            creds = flow.run_local_server(port=0)
+        with open('token.pickle', 'wb') as token:
+            pickle.dump(creds, token)
+    return build('gmail', 'v1', credentials=creds)
+
+service = get_gmail_service()
+
+
 class GMail():
     singleton = None
     messages_loaded = 0
     id_cache = Cache(3600)
 
     def __init__(self):
-        self.mail_server = 'imap.googlemail.com'
-        self.username = settings['gmail/username']
-        self.password = settings['gmail/password']
-        assert self.username, 'Google email not set in: %s' % settings
         self.error = None
         self.inbox = None
         self.sent = None
 
-    def open_connection(self, folder):
-        connection = imaplib.IMAP4_SSL(self.mail_server)
-        connection.login(self.username, self.password)
-        connection.select(folder, readonly=True)
-        return connection
-
-    def open_connections(self):
-        self.inbox = self.open_connection('"[Gmail]/All Mail"')
-        self.sent = self.open_connection('"[Gmail]/Sent Mail"')
-
-    def close_connections(self):
-        try:
-            self.inbox.close()
-            self.sent.close()
-        except:
-            pass
-
     def __enter__(self):
-        self.open_connections()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close_connections()
+        pass
 
-    @classmethod
-    def get_attachment_path(cls, uid, filename):
+    def get_attachment_path(self, uid, filename):
         return os.path.join(utils.cleanup_filename(uid), utils.cleanup_filename(filename))
 
-    @classmethod
-    def save_attachments(cls, msg, timestamp):
+    def save_attachments(self, msg, timestamp):
         files = []
-        for part in msg.walk():
-            if part.get_content_maintype() == 'multipart':
+        if not 'parts' in msg['payload']:
+            return []
+        for part in msg["payload"]["parts"]:
+            if part["mimeType"] == 'multipart':
                 continue
-            disposition = part.get('Content-Disposition')
+            headers = self.parse_headers(part)
+            disposition = headers.get('Content-Disposition')
             if not disposition or not disposition.startswith('attachment;'):
                 continue
-            filename = part.get_filename()
-            body = part.get_payload(decode=True)
-            path = cls.get_attachment_path(msg['uid'], filename)
-            if filename and body:
+            filename = part["filename"]
+            attachmentId = part["body"]["attachmentId"]
+            attachment = service.users().messages().attachments().get(
+                userId = "me",
+                id = attachmentId,
+                messageId = msg["id"]
+            ).execute()
+
+            file_data = base64.urlsafe_b64decode(attachment['data'].encode('UTF-8'))
+            path = self.get_attachment_path(msg['uid'], filename)
+            if filename and file_data:
                 storage.Storage.add_binary_data(
-                    body,
+                    file_data,
                     {
                         'uid': path,
                         'kind': 'file',
@@ -107,15 +118,32 @@ class GMail():
 
     @classmethod
     def get_body(cls, msg):
-        for part in msg.walk():
-            content_type = part.get_content_type()
-            if content_type in ['text/plain', 'text/html']:
-                body = part.get_payload(decode=True).decode('utf8', errors='ignore')
-                url_domains = cls.get_domain_urls(body)
-                if content_type == 'text/html':
-                    body = htmlparser.get_text(body)
-                return content_type, url_domains, body
-        return '', [], ''
+        payload = msg["payload"]
+        if "parts" in payload:
+            for part in msg["payload"]["parts"]:
+                mime_type = part["mimeType"]
+                if mime_type in ['text/plain', 'text/html']:
+                    data = part['body']['data'].encode('UTF8')
+                    return cls.parse_body(mime_type, data)
+        body = payload['body']
+        if body['size'] == 0:
+            return '', [], ''
+        mime_type = payload["mimeType"]
+        data = body['data'].encode('UTF8')
+        return cls.parse_body(mime_type, data)
+
+    @classmethod
+    def dump(cls, obj):
+        with open("t.txt", "w") as fout:
+            fout.write(json.dumps(obj, indent=4))
+
+    @classmethod
+    def parse_body(cls, mime_type, data):
+        body = str(base64.urlsafe_b64decode(data), "UTF8")
+        url_domains = cls.get_domain_urls(body)
+        if mime_type == 'text/html':
+            body = htmlparser.get_text(body)
+        return mime_type, url_domains, body
 
     @classmethod
     def get_domain_urls(cls, body):
@@ -128,27 +156,29 @@ class GMail():
     @classmethod
     def load_messages(cls, count, start=0):
         try:
-            logger.info('Loading gmail for the last %s days - %s days back' % (count, start))
+            logger.info('Loading gmail for the 1ast %s days - %s days back' % (count, start))
             cls.messages_loaded = 0
+
             day = start
-            reader = None
+            reader = GMail()
             while settings['gmail/loading'] and day < count:
                 try:
-                    if reader is None:
-                        reader = GMail()
-                    with reader:
-                        inbox = reader.process_messages_for_day(reader.inbox, day)
-                        sent = reader.process_messages_for_day(reader.sent, day)
-                        contact.cleanup()
-                        logger.debug('Processed %d inbox and %d sent messages for day %d' % (
-                            inbox or 0, sent or 0, day
-                        ))
-                        logger.info(cls.get_status())
+                    before = datetime.date.today() - datetime.timedelta(day)
+                    after = before - datetime.timedelta(1)
+                    query = "before: {0} after: {1}".format(before.strftime('%Y/%m/%d'), after.strftime('%Y/%m/%d'))
+                    result = service.users().messages().list(userId="me", maxResults=1000, q=query).execute()
+                    logger.info("Load {0} => {1}".format(query, len(result["messages"])))
+                    for message in result["messages"]:
+                        response = service.users().messages().get(userId="me", id=message["id"], format='full').execute()
+                        reader.parse_message(response)
+                    contact.cleanup()
+                    logger.debug('Processed %d inbox and %d sent messages for day %d' % (0, 0, day))
+                    logger.info(cls.get_status())
                 except Exception as e:
                     logger.error('Cannot load message for day %d: %s' % (day, e))
                     import traceback
                     traceback.print_exc()
-                    reader = None
+                    return
                 else:
                     settings['gmail/days'] = max(day, settings['gmail/days'])
                     day += 1
@@ -157,81 +187,16 @@ class GMail():
             storage.Storage.log_search_stats()
             logger.info('Loaded %d messages in total' % cls.messages_loaded)
 
-    def process_messages_for_day(self, connection, day):
-        query = '(since "%s" before "%s")' % (self.get_day_string_internal(day), self.get_day_string_internal(day - 1))
-        logger.debug('Get messages for day -%d: %s' % (day, query))
-        message_ids = self.fetch_message_ids(connection, query)
-        return self.parse_messages(connection, [msg_id for msg_id in message_ids if msg_id not in self.id_cache])
-
-    def fetch_message_ids(self, connection, query):
-        result, message_ids = connection.uid('search', None, query)
-        if result == "OK" and message_ids[0]:
-            return message_ids[0].decode("utf-8").split(' ')
-        return []
-
-    @classmethod
-    def get_day_string(cls, day):
-        return (datetime.date.today() - datetime.timedelta(days=day)).strftime("%Y/%m/%d")
-
-    @classmethod
-    def get_day_string_internal(cls, day):
-        return (datetime.date.today() - datetime.timedelta(days=day)).strftime("%d-%b-%Y")
-
-    def parse_messages(self, connection, message_ids):
-        if not message_ids:
-            return
-        logger.debug('Parsing %d message ids' % len(message_ids))
-        logger.debug('Cache size = %d' % len(self.id_cache))
-        result, responses = connection.uid('fetch', ','.join(message_ids), '(RFC822)')
-        if result == 'OK':
-            responses = list(filter(lambda response: len(response) > 1, responses))
-            for n,response in enumerate(responses):
-                self.id_cache[message_ids[n]] = True
-                try:
-                    self.parse_message(
-                        [part.decode('utf8', errors='ignore') for part in response],
-                        sent=connection == self.sent
-                    )
-                except Exception as e:
-                    logger.error('Cannot handle response due to %s' % e)
-                    logger.error('Response: %s', response)
-                    logger.error(traceback.format_exc())
-                else:
-                    GMail.messages_loaded += 1
-            return len(responses)
-        else:
-            raise Exception(result)
-
-    def decode_header(self, s):
-        try:
-            text, encoding = email.header.decode_header(s)[0]
-            return text.decode('utf8', errors='ignore')
-        except:
-            return s
-
-    def get_addresses(self, persons_string, timestamp):
-        return [
-            contact.find_contact(email_address.lower(), self.decode_header(name), timestamp=timestamp)['email']
-            for name, email_address in email.utils.getaddresses(persons_string)
-            if email_address
-        ]
-
-    def get_persons(self, timestamp, *person_strings):
-        return [
-            contact.find_contact(email_address.lower(), self.decode_header(name), timestamp=timestamp)
-            for name, email_address in email.utils.getaddresses(person_strings)
-            if email_address
-        ]
-
-    def parse_message(self, response, sent):
-        uid, data = response
-        msg = email.message_from_string(data)
-        msg['uid'] = uid
-        subject = self.decode_header(msg['Subject'])
-        timestamp = self.get_timestamp(msg.get('Received', msg.get('Date')).split(';')[-1].strip())
+    def parse_message(self, msg):
+        msg["payload"]["headers"] = self.parse_headers(msg["payload"])
+        msg["uid"] = msg["id"]
+        payload = msg['payload']
+        headers = payload['headers']
+        subject = self.decode_header(headers.get('Subject', msg.get("snippet", "")))
+        timestamp = headers['Date']
         content_type, url_domains, body = self.get_body(msg)
         label, words, rest = self.parse_email_text(subject, body)
-        who = msg.get('To') if sent else msg.get('From')
+        who = headers.get('To') or headers.get('From')
         persons = self.get_persons(timestamp, who)
         emails = [person.email for person in persons]
         names = [person.name for person in persons]
@@ -241,7 +206,7 @@ class GMail():
         settings.increment('gmail/count')
         storage.Storage.add_data({
             'uid': msg['uid'] or msg['Message-ID'],
-            'message_id': msg['Message-ID'],
+            'message_id': headers.get('Message-ID', msg['uid']),
             'names': names,
             'emails': emails,
             'thread': thread,
@@ -256,6 +221,28 @@ class GMail():
             'files': files,
         })
 
+    def parse_headers(self, part):
+        headers = dict([
+            (header["name"], header["value"])
+            for header in part["headers"] 
+        ])
+        headers["Date"] = part.get("internalDate", 0)
+        return headers
+
+    def decode_header(self, s):
+        try:
+            text, encoding = email.header.decode_header(s)[0]
+            return text.decode('utf8', errors='ignore')
+        except:
+            return s
+
+    def get_persons(self, timestamp, *person_strings):
+        return [
+            contact.find_contact(email_address.lower(), self.decode_header(name), timestamp=timestamp)
+            for name, email_address in email.utils.getaddresses(person_strings)
+            if email_address
+        ]
+
     @classmethod
     def parse_email_text(cls, subject, body):
         subject_words = stopwords.remove_stopwords(subject)
@@ -269,12 +256,6 @@ class GMail():
         logger.debug('all: "%s"' % words)
         logger.debug('rest: "%s"' % rest)
         return label, words, rest
-
-    @classmethod
-    def get_timestamp(cls, datestring):
-        datestring = re.sub(DATESTRING_RE, '', datestring)
-        dt = datetime.datetime.strptime(datestring, '%a, %d %b %Y %H:%M:%S')
-        return int(time.mktime(dt.timetuple()))
 
     @classmethod
     def get_status(cls):
@@ -387,7 +368,7 @@ def delete_all():
 
 def load():
     days = settings['gmail/days']
-    GMail.load(days + 3650, days)
+    GMail.load(days + 365, days)
 
 
 def poll():

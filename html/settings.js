@@ -1,18 +1,5 @@
 $('#ikke-gmail-needed').css('display', 'none');
 
-function setup_gmail() {
-    $.get('/setup_google', function(response) {
-        document.location = 'https://myaccount.google.com/apppasswords';
-    });
-}
-
-function setup_facebook() {
-    var url = 'developers.facebook.com/quickstarts';
-    $.get('/preparesetup?url=' + url, function(response) {
-        document.location = 'https://developers.facebook.com/quickstarts/?platform=web';
-    });
-}
-
 function check_history() {
     $.getJSON('/status', function(response) {
         $('.history').each(function() {

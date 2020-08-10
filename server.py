@@ -58,7 +58,6 @@ class Server(BaseHTTPRequestHandler):
             '/render': self.render,
             '/open': self.open_local,
             '/settings': self.settings,
-            '/preparesetup': self.prepare_setup,
             '/continuesetup': self.continue_setup,
             '/setupgmail': self.setup_gmail,
             '/setupfacebook': self.setup_facebook,
@@ -226,10 +225,6 @@ class Server(BaseHTTPRequestHandler):
     def dothis(self):
         self.respond(dothis.get_work(self.args['url']))
 
-    def prepare_setup(self):
-        dothis.activate(self.args.get('url'))
-        self.respond('OK')
-
     def continue_setup(self):
         url = self.args.get('url')
         args = self.args.get('args')
@@ -240,9 +235,8 @@ class Server(BaseHTTPRequestHandler):
     def setup_gmail(self):
         settings['gmail/username'] = self.args['gu']
         settings['gmail/password'] = self.args['gp']
-        html = '<script>document.location="/settings";</script>'
         threading.Thread(target=lambda: Storage.load('gmail')).start()
-        self.respond(html)
+        self.respond("OK")
 
     def setup_facebook(self):
         if self.args.get('appid'):

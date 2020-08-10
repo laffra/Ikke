@@ -135,6 +135,14 @@ class Storage:
             raise ValueError('Unsupported OS:', os.name)
 
     @classmethod
+    def get_search_command_backup(cls, query, days):
+        # type (str,int) -> list
+        if os.name == 'posix':
+            return ['grep', query, "-l", "-R", utils.HOME_DIR]
+        else:
+            raise ValueError('Unsupported OS:', os.name)
+
+    @classmethod
     def search(cls, query, days, operator='-interpret'):
         # type: (str,int,str) -> list
         assert isinstance(query, str)
@@ -142,16 +150,17 @@ class Storage:
         cls.stats = defaultdict(int)
         search_start = time.time()
         command = cls.get_search_command(query, days)
-        paths = list(filter(None, cls.run_command(command)))
-        logger.info('Run command "%s" ==> %d results' % (' '.join(command), len(paths)))
+        command_backup = cls.get_search_command_backup(query, days)
+        paths = set(list(filter(None, cls.run_command(command))) + list(filter(None, cls.run_command(command_backup))))
+        logger.info('==> %d results' % len(paths))
         for path in paths:
-            logger.debug('   %s', path)
+            logger.info('   %s', path)
         resolve_start = time.time()
         query_words = query.split(' ')
         results = list(filter(lambda item: item and item.matches(query_words), map(cls.resolve_path, paths)))
-        logger.debug('==> %d resolved items' % len(results))
+        logger.info('==> %d resolved items' % len(results))
         for n,item in enumerate(results):
-            logger.debug('   %d %s', n, item.kind)
+            logger.info('   %d %s', n, item.kind)
         cls.record_search_stats(query, len(paths), time.time() - search_start, len(results), time.time() - resolve_start)
         return results
 
@@ -258,6 +267,7 @@ class Storage:
     @classmethod
     def run_command(cls, command):
         # type: (list) -> str
+        logger.info('Run command "%s"' % ' '.join(command))
         process = subprocess.Popen(command, stdout=subprocess.PIPE)
         stdout, stderr = process.communicate()
         try:
