@@ -1,9 +1,13 @@
 import cache
 import compressor
 import datetime
+import elasticsearch
 from importlib import import_module
+import itertools
+import json
 import logging
 import os
+import requests
 from settings import settings
 import shutil
 import stat
@@ -13,25 +17,6 @@ import traceback
 import utils
 import time
 from collections import defaultdict
-
-MAX_NUMBER_OF_ITEMS = 500
-
-GET_COMMENT_SCRIPT = '''osascript<<END
-    tell application "Finder"
-        set filePath to POSIX file "%s"
-        set the_File to filePath as alias
-        get comment of the_File
-    end tell 
-END'''
-
-SET_COMMENT_SCRIPT = '''osascript<<END
-    tell application "Finder"
-        set filePath to POSIX file "%s"
-        set fileComment to "%s"
-        set the_File to filePath as alias
-        set comment of the_File to fileComment
-    end tell 
-END'''
 
 FILE_FORMAT_ICONS = {
     'pdf': 'icons/pdf-icon.png',
@@ -51,36 +36,26 @@ FILE_FORMAT_ICONS = {
     'file': 'icons/file-icon.png',
 }
 FILE_FORMAT_IMAGE_EXTENSIONS = { 'png', 'ico', 'jpg', 'jpeg', 'gif', 'pnm' }
-ITEM_KINDS = [ 'contact', 'gmail', 'browser', 'file', 'facebook' ]
+ITEM_KINDS = [ 'contact', 'gmail', 'hangouts', 'browser', 'file', 'facebook' ]
+INDEX = "insights"
+MAX_NUMBER_OF_ITEMS = 1000
 
 logger = logging.getLogger(__name__)
 
 item_handlers = { }
+
+
 
 class Storage:
     stats = defaultdict(int)
     search_cache = cache.Cache(60)
     file_cache = cache.Cache(60)
     history_cache = cache.Cache(60)
+    elastic_client = elasticsearch.Elasticsearch([{'host': 'localhost', 'port': '9200'}])
 
     @classmethod
     def add_data(cls, data):
-        # type: (dict) -> None
-        obj = compressor.deserialize(compressor.serialize(data))
-        cls.add_file(
-            compressor.serialize(data),
-            data,
-            "w"
-        )
-
-    @classmethod
-    def add_binary_data(cls, content, data):
-        # type: (bytes,dict) -> None
-        cls.add_file(
-            content,
-            data,
-            "wb"
-        )
+        cls.elastic_client.index(index=data["kind"], id=data["uid"], doc_type=data["kind"], body=data)
 
     @classmethod
     def get_local_path(cls, obj):
@@ -99,8 +74,7 @@ class Storage:
         return local_path
 
     @classmethod
-    def add_file(cls, body, data, format="wb"):
-        # type: (bytes,dict,str) -> None
+    def add_binary_data(cls, content, data):
         assert 'kind' in data, "Kind needed"
         assert 'uid' in data, "UID needed"
         assert 'timestamp' in data, "Timestamp needed"
@@ -110,59 +84,62 @@ class Storage:
         for k,v in data.items():
             logger.debug('     %09s %s' % (k, v))
         try:
-            with open(path, format) as fout:
+            with open(path, "wb") as fout:
                 cls.stats['writes'] += 1
-                fout.write(body)
+                fout.write(content)
             os.utime(path, (data['timestamp'], data['timestamp']))
             if path in cls.file_cache:
                 del cls.file_cache[path]
         except IOError as e:
-            logger.error('Cannot add file. Path len = %d' % len(path))
+            logger.error('Cannot add file. Path len = %d: %s' % (len(path), e))
             raise
 
     @classmethod
-    def get_search_command(cls, query, days):
-        # type (str,int) -> list
-        if os.name == 'nt':
-            local_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'localsearch')
-            since = cls.get_year_month_day(days)
-            return ['cscript', '/nologo', os.path.join(local_dir, 'search.vbs'), utils.HOME_DIR, query, since]
-        elif os.name == 'posix':
-            operator = '-interpret'
-            since = 'modified:%s-%s' % (cls.get_day_month_year(days), cls.get_day_month_year(-1))
-            return ['mdfind', '-onlyin', utils.HOME_DIR, operator, query, since]
-        else:
-            raise ValueError('Unsupported OS:', os.name)
-
-    @classmethod
-    def get_search_command_backup(cls, query, days):
-        # type (str,int) -> list
-        if os.name == 'posix':
-            return ['grep', query, "-l", "-R", utils.HOME_DIR]
-        else:
-            raise ValueError('Unsupported OS:', os.name)
-
-    @classmethod
-    def search(cls, query, days, operator='-interpret'):
+    def search(cls, query, days):
         # type: (str,int,str) -> list
         assert isinstance(query, str)
         assert isinstance(days, int), 'unexpected type %s: %s' % (type(days), days)
         cls.stats = defaultdict(int)
         search_start = time.time()
-        command = cls.get_search_command(query, days)
-        command_backup = cls.get_search_command_backup(query, days)
-        paths = set(list(filter(None, cls.run_command(command))) + list(filter(None, cls.run_command(command_backup))))
-        logger.info('==> %d results' % len(paths))
-        for path in paths:
-            logger.info('   %s', path)
+        paths = []
+        result = cls.elastic_client.search(
+            size = MAX_NUMBER_OF_ITEMS,
+            body = {
+                "query": {
+                    "query_string": {
+                        "query": cls.wildcard(query),
+                        "default_field": "label",
+                        "fuzziness": "AUTO"
+                    }
+                }
+            }
+        )
+        hits = result["hits"]["hits"]
+        logger.info("Found %d hits for '%s'" % (len(hits), query))
         resolve_start = time.time()
-        query_words = query.split(' ')
-        results = list(filter(lambda item: item and item.matches(query_words), map(cls.resolve_path, paths)))
-        logger.info('==> %d resolved items' % len(results))
-        for n,item in enumerate(results):
-            logger.info('   %d %s', n, item.kind)
+        results = [cls.resolve(hit["_source"]) for hit in hits]
         cls.record_search_stats(query, len(paths), time.time() - search_start, len(results), time.time() - resolve_start)
         return results
+    
+    @classmethod
+    def wildcard(cls, query):
+        return " ".join("*%s*" % word for word in query.split())
+
+    @classmethod
+    def resolve(cls, obj):
+        return cls.to_item(obj)
+
+    @classmethod
+    def load_item(cls, path):
+        with open(path) as f:
+            Storage.stats['items_read'] += 1
+            try:
+                obj = compressor.deserialize(f.read())
+                obj['kind'] = path[len(utils.ITEMS_DIR) + 1:-4].split(os.path.sep)[0]
+                return cls.to_item(obj, path)
+            except:
+                Storage.stats['files'] += 1
+                return File(path)
 
     @classmethod
     def record_search_stats(cls, query,  search_count, search_duration, resolve_count, resolve_duration):
@@ -186,56 +163,13 @@ class Storage:
         # type: (str) -> dict
         person = cls.search_cache.get(email)
         if not person:
-            path = os.path.join(utils.HOME_DIR, 'items', 'contact', email)
-            if os.path.exists(path):
-                with open(path, 'r') as f:
-                    cls.stats['contacts_read'] += 1
-                    from importers import contact
-                    try:
-                        person = contact.deserialize(compressor.deserialize(f.read()))
-                        person.path = person['path'] = path
-                    except:
-                        logger.error('Could not deserialize %s: %s', path, traceback.format_exc())
-            else:
-                logger.debug('Contact not found: %s', path)
             cls.search_cache[email] = person
         return person
 
     @classmethod
     def search_file(cls, filename):
         # type: (str) -> list
-        return cls.search(filename, operator='-name')
-
-    @classmethod
-    def load_item(cls, path):
-        with open(path) as f:
-            Storage.stats['items_read'] += 1
-            try:
-                obj = compressor.deserialize(f.read())
-                obj['kind'] = path[len(utils.ITEMS_DIR) + 1:-4].split(os.path.sep)[0]
-                return cls.to_item(obj, path)
-            except:
-                Storage.stats['files'] += 1
-                return File(path)
-
-    @classmethod
-    def resolve_path(cls, path):
-        # type: (str) -> (dict,None)
-        if not path or not os.path.isfile(path):
-            logger.info('skip non file: %s' % path[len(utils.HOME_DIR):])
-            return None
-        item = cls.file_cache.get(path)
-        if not item:
-            kind, *parts = path[len(utils.ITEMS_DIR) + 1:-4].split(os.path.sep)
-            try:
-                obj = compressor.decode(os.path.sep.join(parts))
-            except Exception as e:
-                item = cls.load_item(path)
-                cls.file_cache[path] = item
-            else:
-                obj['kind'] = kind
-                item = cls.to_item(obj, path)
-        return item
+        return cls.search(filename, 0)
 
     @classmethod
     def can_load_more(cls, kind):
@@ -246,11 +180,9 @@ class Storage:
         return settings['%s/count' % kind] > 0
 
     @classmethod
-    def to_item(cls, obj, path):
+    def to_item(cls, obj):
         handler = item_handlers[obj['kind']]
-        item = handler.deserialize(obj)
-        item.path = item['path'] = path
-        return item
+        return handler.deserialize(obj)
 
     @classmethod
     def get_day_month_year(cls, days):
@@ -263,19 +195,6 @@ class Storage:
         # type: (int) -> str
         dt = datetime.datetime.now() - datetime.timedelta(days=days)
         return '%4d-%02d-%02d' % (dt.year, dt.month, dt.day)
-
-    @classmethod
-    def run_command(cls, command):
-        # type: (list) -> str
-        logger.info('Run command "%s"' % ' '.join(command))
-        process = subprocess.Popen(command, stdout=subprocess.PIPE)
-        stdout, stderr = process.communicate()
-        try:
-            for line in stdout.split('\n'):
-                yield line.strip()
-        except:
-            for line in stdout.split(b'\n'):
-                yield str(line.strip(), 'utf8')
 
     @classmethod
     def setup(cls):
@@ -318,7 +237,12 @@ class Storage:
             return
         try:
             settings['%s/deleting' % kind] = True
-            import_module('importers.%s' % kind).delete_all()
+            cls.elastic_client.delete_by_query(index = kind, body = {
+                "query": {
+                    "match_all": {}
+                }
+            })
+            item_handlers[kind].delete_all()
             cls.clear(kind)
         except Exception as e:
             logger.error('Could not stop delete all %s: %s' % (kind, e))
@@ -483,17 +407,11 @@ Storage.setup()
 
 if __name__ == '__main__':
     if False:
-        path = "/Users/laffra/IKKE/gmail/content_type/text-html/kind/gmail/label/activity aler ... n alert limit/message_id/<22f44d4d-ad5a-40f6-83dc-336b2b94294c@xtnvs5mta401.xt.local>/receivers/[/1/laffra@gmail.com/senders/[/1/onlinebanking@ealerts.bankofamerica.com/subject/Activity Alert: Electronic or Online Withdrawal Over Your Chosen Alert Limit/thread/activity aler ... n alert limit - ['laffra@gmail.com', 'onlinebanking@ealerts.bankofamerica.com']/timestamp/1510537596/uid/16455 (UID 92562 RFC822 {25744}.txt"
-        for k,v in Storage.resolve_path(path).items():
-            if v:
-                logger.debug('%s=%s' % (k, v))
-
-    if False:
         import cProfile
         cProfile.run('Storage.search("linkedin", days=10000)', sort="cumulative")
 
     if True:
-        Storage.search('Rowan', days=1)
+        print(Storage.search('a', days=1))
 
     if False:
         for kind in ['browser','file','gmail','contact']:

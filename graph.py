@@ -24,7 +24,7 @@ days = {
 MY_EMAIL_ADDRESS = ChromePreferences().get_email()
 LINE_COLORS = [ '#f4c950', '#ee4e5a', '#489ac9', '#41ba7d', '#fb7c54',] * 2
 
-ALL_ITEM_KINDS = [ 'all', 'contact', 'gmail', 'browser', 'file', 'facebook', ]
+ALL_ITEM_KINDS = [ 'all', 'contact', 'gmail', 'hangouts', 'browser', 'file', 'facebook', ]
 MY_ITEM_KINDS = [ 'contact', 'gmail', 'browser', 'file', 'facebook' ]
 
 ADD_WORDS_MINIMUM_COUNT = 50
@@ -54,6 +54,7 @@ class Graph:
     def search(self, timestamp):
         start_time = time.time()
         all_items = Storage.search(unquote(self.query), timestamp)
+
         duration = time.time() - start_time
         self.add_result('all', len(all_items), all_items, duration)
         for kind in MY_ITEM_KINDS:
@@ -86,7 +87,7 @@ class Graph:
         label_index = dict((item.label, n) for n, item in enumerate(items))
         nodes = [vars(item) for item in items]
         def get_color(item):
-            return LINE_COLORS[label_index[item.label] % len(LINE_COLORS)]
+            return LINE_COLORS[label_index.get(item.label, 0) % len(LINE_COLORS)]
         links = [
             {
                 'source': nodes_index[item1.uid],

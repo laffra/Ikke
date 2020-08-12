@@ -173,19 +173,8 @@ class Server(BaseHTTPRequestHandler):
         self.respond(json.dumps(graph))
 
     def get_resource(self):
-        try:
-            path = os.path.join(utils.INSTALL_FOLDER, 'html', self.args['path'])
-            obj = Storage.resolve_path(path)
-            if obj:
-                with open(obj['path'], 'rb') as f:
-                    self.respond(f.read())
-            else:
-                self.respond(self.load_resource(path, 'rb'))
-        except Exception as e:
-            msg = 'Cannot load resource %s due to %s' % (self.args.get('path', '???'), e)
-            logging.error(msg)
-            self.respond(msg)
-            raise
+        path = os.path.join(utils.INSTALL_FOLDER, 'html', self.args['path'])
+        self.respond(self.load_resource(path, 'rb'))
 
     def render(self):
         try:

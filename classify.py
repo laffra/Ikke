@@ -93,9 +93,6 @@ def get_most_common_words(query, items):
     for word in query.lower().split(' '):
         if word in counter:
             del counter[word]
-            print('remove ', word)
-        else:
-            print('skip ', word)
     most_common = {key for key, count in counter.most_common(MOST_COMMON_COUNT)}
     return most_common
 

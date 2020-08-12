@@ -123,8 +123,9 @@ class GMail():
             for part in msg["payload"]["parts"]:
                 mime_type = part["mimeType"]
                 if mime_type in ['text/plain', 'text/html']:
-                    data = part['body']['data'].encode('UTF8')
-                    return cls.parse_body(mime_type, data)
+                    if "data" in part["body"]:
+                        data = part['body']['data'].encode('UTF8')
+                        return cls.parse_body(mime_type, data)
         body = payload['body']
         if body['size'] == 0:
             return '', [], ''
@@ -202,8 +203,10 @@ class GMail():
         names = [person.name for person in persons]
         thread = '%s - %s' % (label, emails)
         files = self.save_attachments(msg, timestamp)
-        logger.debug('Add %s: %s', msg['uid'], subject)
-        settings.increment('gmail/count')
+        kind = 'gmail'
+        if "CHAT" in msg.get("labelIds", []):
+            kind = 'hangouts'
+        settings.increment('%s/count' % kind)
         storage.Storage.add_data({
             'uid': msg['uid'] or msg['Message-ID'],
             'message_id': headers.get('Message-ID', msg['uid']),
@@ -215,7 +218,7 @@ class GMail():
             'words': words,
             'rest': rest,
             'content_type': content_type,
-            'kind': 'gmail',
+            'kind': kind,
             'timestamp': timestamp,
             'url_domains': url_domains,
             'files': files,
@@ -224,7 +227,7 @@ class GMail():
     def parse_headers(self, part):
         headers = dict([
             (header["name"], header["value"])
-            for header in part["headers"] 
+            for header in part.get("headers", []) 
         ])
         headers["Date"] = part.get("internalDate", 0)
         return headers
@@ -239,7 +242,7 @@ class GMail():
     def get_persons(self, timestamp, *person_strings):
         return [
             contact.find_contact(email_address.lower(), self.decode_header(name), timestamp=timestamp)
-            for name, email_address in email.utils.getaddresses(person_strings)
+            for name, email_address in email.utils.getaddresses(filter(None, person_strings))
             if email_address
         ]
 

@@ -18,10 +18,6 @@ function check_history() {
             stop_load_button.css('display', status.loading ? 'block' : 'none');
             clear_button.css('display', status.count == 0 || status.deleting ? 'none' : 'block');
             stop_clear_button.css('display', status.count > 0 && status.deleting ? 'block' : 'none');
-            if (status['pending']) {
-                $('.nopending-' + kind).css('display', 'none')
-                span.text('Please click the Setup button').css('color', 'red');
-            }
         })
         setTimeout(check_history, 1000);
     })
