@@ -1,11 +1,8 @@
 from storage import Storage
 
-import compressor
-import dothis
 from importers import browser
 from importers import contact
 from importers import download
-from importers import facebook
 from importers import file
 from importers import gmail
 import installer
@@ -51,23 +48,18 @@ class Server(BaseHTTPRequestHandler):
             '/status': self.status,
             '/load': self.load,
             '/stopload': self.stop_loading,
-            '/track': self.track,
-            '/dothis': self.dothis,
+            '/save_image': self.save_image,
             '/extensions': self.extensions,
             '/get': self.get_resource,
             '/render': self.render,
             '/open': self.open_local,
             '/settings': self.settings,
-            '/continuesetup': self.continue_setup,
-            '/setupgmail': self.setup_gmail,
-            '/setupfacebook': self.setup_facebook,
             '/jquery.js': self.get_jquery,
             '/search': self.search,
             '/graph': self.get_graph,
             '/poll': self.poll,
-            '/fb': self.fb,
         }
-        logger.debug('GET %s' % self.path)
+        logger.info('GET %s' % self.path)
         self.parse_args()
         routes.get(self.path, self.get_file)()
 
@@ -147,20 +139,6 @@ class Server(BaseHTTPRequestHandler):
         Storage.load(self.args['kind'])
         self.respond('OK')
 
-    def fb(self):
-        code = self.args.get('code')
-        if code:
-            logger.info('Exchange code for access token')
-            redirect_uri = 'http://localhost:%d/fb' % settings['port']
-            client_secret = settings['facebook/appsecret']
-            client_id = settings['facebook/appid']
-            url = 'https://graph.facebook.com/v2.11/oauth/access_token?client_id=%s&redirect_uri=%s' \
-                   '&client_secret=%s&code=%s' % (client_id, redirect_uri, client_secret, code)
-            logger.info('Load URL: %s' % url)
-            response = json.loads(urlopen(url).read().decode())
-            settings['facebook/access_token'] = response['access_token']
-        self.settings()
-
     def poll(self):
         poller.poll()
 
@@ -178,16 +156,15 @@ class Server(BaseHTTPRequestHandler):
 
     def render(self):
         try:
-            item = Storage.load_item(self.args.get('path'))
-            self.respond('<html>%s<p>Key:<pre>%s</pre><p>Value:<pre>%s</pre>' % (
-                item.render(self.args['query']),
-                json.dumps(compressor.deserialize(compressor.serialize(item)), indent=4),
-                json.dumps(item, indent=4)
+            handler = Storage.get_handler(self.args["kind"])
+            self.respond('<html>%s<p>Args:<pre>%s</pre>' % (
+                handler.render(self.args),
+                json.dumps(self.args, indent=4),
             ))
         except:
             msg = 'Cannot render: %s' % traceback.format_exc()
             logging.error(msg)
-            self.respond(self.get_resource())
+            self.respond(msg)
 
     def get_jquery(self):
         self.respond(self.load_resource('jquery.js', 'rb'))
@@ -211,35 +188,8 @@ class Server(BaseHTTPRequestHandler):
     def open_local(self):
         webbrowser.open('file://%s' % self.args['path'].replace(' ', '\\ '))
 
-    def dothis(self):
-        self.respond(dothis.get_work(self.args['url']))
-
-    def continue_setup(self):
-        url = self.args.get('url')
-        args = self.args.get('args')
-        dothis.activate(url)
-        html = '<script>document.location="https://%s/%s";</script>' % (url, args)
-        self.respond(html)
-
-    def setup_gmail(self):
-        settings['gmail/username'] = self.args['gu']
-        settings['gmail/password'] = self.args['gp']
-        threading.Thread(target=lambda: Storage.load('gmail')).start()
-        self.respond("OK")
-
-    def setup_facebook(self):
-        if self.args.get('appid'):
-            settings['facebook/appid'] = self.args['appid']
-            settings['facebook/appsecret'] = self.args['appsecret']
-            dothis.activate('developers.facebook.com/apps')
-            url = facebook.get_oauth_url()
-        else:
-            url = facebook.get_login_url()
-        html = '<script>document.location="%s";</script>' % url
-        self.respond(html)
-
-    def track(self):
-        browser.track(
+    def save_image(self):
+        browser.save_image(
             self.args.get('url', ''),
             self.args.get('title', ''),
             self.args.get('image', ''),

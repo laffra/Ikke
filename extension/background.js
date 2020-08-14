@@ -24,20 +24,14 @@ function send(url, data, handler) {
 chrome.runtime.onMessage.addListener(
     function(request, sender, sendResponse) {
         switch (request.type) {
-            case 'track':
-                call('http://localhost:1964/track' +
+            case 'save_image':
+                call('http://localhost:1964/save_image' +
                     '?url=' + encodeURIComponent(request.url) +
                     '&title=' + encodeURIComponent(request.title) +
                     '&image=' + encodeURIComponent(request.image) +
                     '&selection=' + encodeURIComponent(request.selection) +
                     '&favicon=' + encodeURIComponent(request.favicon) +
                     '&keywords=' + encodeURIComponent(request.keywords || ''));
-                break;
-            case 'dothis':
-                console.log('Ikke background: dothis: ' + request.url);
-                call('http://localhost:1964/dothis?url=' + encodeURIComponent(request.url), function(response) {
-                    sendResponse(response);
-                });
                 break;
         }
         return true;

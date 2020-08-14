@@ -15,8 +15,8 @@ When [pronounced correctly](https://upload.wikimedia.org/wikipedia/commons/3/39/
 Ikke sounds a lot like the English word "ticket", if you remove the leading and trailing t's.
 
 Ikke consists of various components:
- * Importers for data sources such as browser history, local downloads, gmail, facebook, etc.
- * A Chrome browser extension that helps you track what websites you visited and find them back quickly.
+ * Importers for data sources such as browser history, local downloads, gmail, git, etc.
+ * A Chrome browser extension that collects a thumbnail image of websites you visited to find them back quickly.
  * A super-fast freetext search backend that runs on your local machine, not needing any cloud access.
  * Smooth graph visualizations that show relationships between various data sources.
  

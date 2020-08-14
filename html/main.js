@@ -172,7 +172,7 @@ function load_grid(kind, w, h) {
             table.append($('<tr>')
                 .on("click", function() {
                     var row = $(this);
-                    launch(row.attr('label'), row.attr('path'));
+                    launch(row);
                 })
                 .attr('kind', node.kind)
                 .attr('label', node.label)
@@ -529,7 +529,7 @@ function load_graph(kind, w, h) {
 
 
         node.on("click", function(d) {
-            launch(d.label, d.path);
+            launch(d);
         });
 
         force.on("tick", function() {
@@ -567,12 +567,15 @@ function load_graph(kind, w, h) {
     });
 }
 
-function launch(label, path) {
-    if (path) {
-        window.open("/render?query=" + localStorage.query + "&label=" + label + "&path=" + (path || ''));
-    } else {
-        document.location = "/?q=" + label;
-    }
+function launch(obj) {
+    const protocol = window.location.protocol;
+    const host = window.location.hostname;
+    const port = window.location.port;
+    var url = protocol + "//" + host + ":" +  port + "/render?query=" + localStorage.query;
+    Object.keys(obj).forEach(function(key,index) {
+        url += "&" + key + "=" + encodeURIComponent(obj[key]);
+    });
+    window.open(url);
 }
 
 function isNumber(n) {

@@ -3,12 +3,12 @@ var lastSelection = null;
 
 var timer = setTimeout(function() { }, 1000);
 
-document.addEventListener('mouseup', scheduleTracker);
-document.addEventListener('keyup', scheduleTracker);
+document.addEventListener('mouseup', scheduleImageLoader);
+document.addEventListener('keyup', scheduleImageLoader);
 
-function scheduleTracker() {
+function scheduleImageLoader() {
     clearTimeout(timer);
-    timer = setTimeout(runTracker, 5000);
+    timer = setTimeout(runImageLoader, 5000);
 }
 
 function getBrowserUrl() {
@@ -18,11 +18,11 @@ function getBrowserUrl() {
     return url.split('##')[0];
 }
 
-function runTracker() {
+function runImageLoader() {
     var location = getBrowserUrl();
     var selection = window.getSelection().toString() || '';
     if (location != lastLocation || selection != lastSelection) {
-        track(location, selection);
+        save_image(location, selection);
         lastLocation = location;
         lastSelection = selection;
     }
@@ -75,9 +75,9 @@ function findKeywords() {
     }
 }
 
-function track(location, selection) {
+function save_image(location, selection) {
     data = {
-        type: 'track',
+        type: 'save_image',
         url: location,
         selection: selection,
         title: document.title,
@@ -85,13 +85,12 @@ function track(location, selection) {
         favicon: getFavIcon(),
         keywords: findKeywords()
     }
-    console.log('PM: track ' + JSON.stringify(data));
     chrome.runtime.sendMessage(data);
 }
 
 if (window.self == window.top) {
-    scheduleTracker();
+    scheduleImageLoader();
     highlightSearch();
 }
 
-console.log('Ikke: contentscript.js loaded.')
+console.log('Ikke: extension loaded.')

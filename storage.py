@@ -1,5 +1,4 @@
 import cache
-import compressor
 import datetime
 import elasticsearch
 from importlib import import_module
@@ -36,7 +35,7 @@ FILE_FORMAT_ICONS = {
     'file': 'icons/file-icon.png',
 }
 FILE_FORMAT_IMAGE_EXTENSIONS = { 'png', 'ico', 'jpg', 'jpeg', 'gif', 'pnm' }
-ITEM_KINDS = [ 'contact', 'gmail', 'hangouts', 'browser', 'file', 'facebook' ]
+ITEM_KINDS = [ 'contact', 'gmail', 'hangouts', 'git', 'browser', 'file' ]
 INDEX = "insights"
 MAX_NUMBER_OF_ITEMS = 1000
 
@@ -55,20 +54,14 @@ class Storage:
 
     @classmethod
     def add_data(cls, data):
-        cls.elastic_client.index(index=data["kind"], id=data["uid"], doc_type=data["kind"], body=data)
+        cls.elastic_client.index(index=data["kind"], id=data["uid"], body=data)
 
     @classmethod
-    def get_local_path(cls, obj):
+    def get_local_path(cls, file):
         # type: (dict) -> str
-        local_path = os.path.join(utils.ITEMS_DIR, obj['kind'], obj['uid'])
-        if local_path.endswith('/'):
-            local_path += '_'
-        if obj['kind'] not in ('contact', 'file'):
-            path_keys = item_handlers[obj['kind']].path_keys
-            local_path = os.path.join(utils.ITEMS_DIR, obj['kind'], compressor.encode(obj, path_keys) + '.txt')
-        parent_dir = os.path.dirname(local_path)
+        local_path = os.path.join(utils.ITEMS_DIR, 'file', file['uid'])
         try:
-            os.makedirs(parent_dir)
+            os.makedirs(os.path.dirname(local_path))
         except:
             pass # allow multiple threads to create the dir at the same time
         return local_path
@@ -95,59 +88,52 @@ class Storage:
             raise
 
     @classmethod
-    def search(cls, query, days):
+    def search(cls, query, days=1, doc_type=None):
         # type: (str,int,str) -> list
         assert isinstance(query, str)
         assert isinstance(days, int), 'unexpected type %s: %s' % (type(days), days)
         cls.stats = defaultdict(int)
         search_start = time.time()
-        paths = []
-        result = cls.elastic_client.search(
-            size = MAX_NUMBER_OF_ITEMS,
-            body = {
-                "query": {
-                    "query_string": {
-                        "query": cls.wildcard(query),
-                        "default_field": "label",
-                        "fuzziness": "AUTO"
+        hits = list(itertools.chain(*[
+            cls.elastic_client.search(
+                index=index,
+                doc_type=doc_type,
+                size=MAX_NUMBER_OF_ITEMS,
+                body={
+                    "query": {
+                        "query_string": {
+                            "query": cls.wildcard(query),
+                            "fuzziness": "2",
+                            "default_field": "*"
+                        }
                     }
                 }
-            }
-        )
-        hits = result["hits"]["hits"]
-        logger.info("Found %d hits for '%s'" % (len(hits), query))
-        resolve_start = time.time()
-        results = [cls.resolve(hit["_source"]) for hit in hits]
-        cls.record_search_stats(query, len(paths), time.time() - search_start, len(results), time.time() - resolve_start)
+            )["hits"]["hits"]
+            for index in ITEM_KINDS
+            if index != "file"
+        ]))
+        results = list(filter(None, [cls.resolve(hit["_source"]) for hit in hits]))
+        logger.info("Found %d results for '%s'" % (len(results), query))
+        cls.record_search_stats(query, time.time() - search_start, len(results))
         return results
     
     @classmethod
     def wildcard(cls, query):
-        return " ".join("*%s*" % word for word in query.split())
+        return " ".join("*%s*^5" % word for word in query.split())
 
     @classmethod
     def resolve(cls, obj):
         return cls.to_item(obj)
 
     @classmethod
-    def load_item(cls, path):
-        with open(path) as f:
-            Storage.stats['items_read'] += 1
-            try:
-                obj = compressor.deserialize(f.read())
-                obj['kind'] = path[len(utils.ITEMS_DIR) + 1:-4].split(os.path.sep)[0]
-                return cls.to_item(obj, path)
-            except:
-                Storage.stats['files'] += 1
-                return File(path)
+    def get_handler(cls, kind):
+        return item_handlers[kind]
 
     @classmethod
-    def record_search_stats(cls, query,  search_count, search_duration, resolve_count, resolve_duration):
+    def record_search_stats(cls, query, duration, count):
         cls.stats['searches'] += 1
-        cls.stats['raw_results'] = search_count
-        cls.stats['search_time'] += search_duration
-        cls.stats['results'] = resolve_count
-        cls.stats['resolve_time'] += resolve_duration
+        cls.stats['duration'] += duration
+        cls.stats['results'] = count
         cls.log_search_stats(query)
 
     @classmethod
@@ -181,6 +167,8 @@ class Storage:
 
     @classmethod
     def to_item(cls, obj):
+        if not "kind" in obj:
+            return None
         handler = item_handlers[obj['kind']]
         return handler.deserialize(obj)
 
@@ -268,6 +256,11 @@ class Storage:
         cls.refresh_status()
 
     @classmethod
+    def reset(cls):
+        for kind in ITEM_KINDS:
+            cls.delete_all(kind)
+
+    @classmethod
     def get_status(cls):
         status = {}
         start = time.time()
@@ -295,6 +288,14 @@ class Storage:
             threading.Thread(target=lambda: shutil.rmtree(tmpdir)).start()
         time.sleep(0.5)
         logger.info('Cleared all data for "%s"' % path)
+
+    @classmethod
+    def get_all(cls, kind):
+        return cls.elastic_client.search(index = kind, body = {
+            "query": {
+                "match_all": {}
+            }
+        })
 
 
 class Data(dict):
@@ -408,10 +409,7 @@ Storage.setup()
 if __name__ == '__main__':
     if False:
         import cProfile
-        cProfile.run('Storage.search("linkedin", days=10000)', sort="cumulative")
-
-    if True:
-        print(Storage.search('a', days=1))
+        cProfile.run('Storage.search("laffra", 10000)', sort="cumulative")
 
     if False:
         for kind in ['browser','file','gmail','contact']:
@@ -422,5 +420,6 @@ if __name__ == '__main__':
             if v:
                 logger.info('%s=%s' % (k, v))
 
-
-
+    if True:
+        print(json.dumps(Storage.get_all('browser'), indent=4))
+        print(Storage.search('insights'))

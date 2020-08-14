@@ -58,7 +58,7 @@ def add_related_items(items, me):
         related_item
         for item in items
         for related_item in item.get_related_items()
-        if not related_item.email == me
+        if related_item and not related_item.email == me
     ]
     edges = {
         (item1, item2)

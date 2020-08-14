@@ -328,6 +328,7 @@ class GMailNode(storage.Data):
         return related
 
     def get_related_items(self):
+        return []
         dir = os.path.join(utils.ITEMS_DIR, 'file', utils.cleanup_filename(self.uid))
         files = [
             storage.Storage.load_item(os.path.join(dir, path))
@@ -355,14 +356,15 @@ class GMailNode(storage.Data):
         try:
             return GMailNode(obj)
         except Exception as e:
-            logger.error('Cannot deserialize:', e)
+            logger.error('Cannot deserialize:' + e)
             for k,v in obj.items():
-                logger.error('   ', k, ':', type(v), v)
+                logger.error('%s: %s' % (k, v))
             raise
 
-    def render(self, query):
-        url = 'https://mail.google.com/mail/mu/mp/485/?mui=ca#tl/search/rfc822msgid:%s' % self.message_id
-        return '<html><a href="%s">view in gmail</a>' % url
+
+def render(args):
+    url = 'https://mail.google.com/mail/u/0/#search/rfc822msgid:%s' % args["message_id"]
+    return '<script>document.location=\'%s\';</script>' % url
 
 
 def delete_all():

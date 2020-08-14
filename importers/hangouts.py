@@ -33,8 +33,6 @@ class HangoutsItem(gmail.GMailNode):
         self.kind = 'hangouts'
         self.icon = 'get?path=icons/hangouts-icon.png'
         dict.update(self, vars(self))
-        import json
-        print("HangoutsItem %s" % json.dumps(obj, indent=4))
 
     @classmethod
     def deserialize(cls, obj):
@@ -45,10 +43,6 @@ class HangoutsItem(gmail.GMailNode):
 
 
 def cleanup():
-    pass
-
-
-def poll():
     pass
 
 

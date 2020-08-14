@@ -17,9 +17,6 @@ from threadpool import ThreadPool
 
 HISTORY_QUERY_URLS = 'select visit_count, last_visit_time, title, url from urls'
 
-keys = ('label', 'uid', 'url', 'domain', 'image', 'icon', 'selection', 'words', 'title', 'timestamp')
-path_keys = ('label', 'uid', 'icon', 'image', 'words')
-
 META_DOMAINS = {
     '//www.google.nl',
     '//www.google.com',
@@ -69,7 +66,7 @@ def process_url(rows):
             if n % 1000 == 0:
                 logger.debug('Add %s %s' % (title, url))
             if title:
-                track(url, title, '', get_favicon(url), '', adjust_chrome_timestamp(last_visit_time), force=True)
+                save_image(url, title, '', get_favicon(url), '', adjust_chrome_timestamp(last_visit_time), force=True)
 
 
 def get_favicon(url):
@@ -77,7 +74,7 @@ def get_favicon(url):
     return '%s://%s/favicon.ico' % (url.scheme, url.netloc)
 
 
-def track(url, title, image, favicon, selection, timestamp=0, force=False):
+def save_image(url, title, image, favicon, selection, timestamp=0, force=False):
     if is_meta_site(url):
         return
     domain = urlparse(url).netloc
@@ -180,6 +177,7 @@ class BrowserItem(storage.Data):
         self.zoomed_icon_size = 256 if self.image else 24
         self.node_size = 1
         dict.update(self, vars(self))
+        print(json.dumps(self, indent=4))
 
     @classmethod
     def deserialize(cls, obj):
@@ -200,15 +198,14 @@ class BrowserItem(storage.Data):
     def is_duplicate(self, duplicates):
         if is_meta_site(self.url):
             return True
-        if self.domain != 'facebook.com' and self.domain in duplicates:
+        if self.domain in duplicates:
             return True
         duplicates.add(self.domain)
         return False
 
-    def render(self, query):
-        if not self.url:
-            return 'Error: no url in %s' % json.dumps(self, indent=4)
-        return '<script>document.location=\'%s\';</script>' % self.url
+
+def render(args):
+    return '<script>document.location=\'%s\';</script>' % args.get("url", json.dumps(args))
 
 
 def cleanup():

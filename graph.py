@@ -1,5 +1,4 @@
 from collections import defaultdict
-from importers import facebook
 import logging
 from urllib.parse import unquote
 import time
@@ -24,9 +23,10 @@ days = {
 MY_EMAIL_ADDRESS = ChromePreferences().get_email()
 LINE_COLORS = [ '#f4c950', '#ee4e5a', '#489ac9', '#41ba7d', '#fb7c54',] * 2
 
-ALL_ITEM_KINDS = [ 'all', 'contact', 'gmail', 'hangouts', 'browser', 'file', 'facebook', ]
-MY_ITEM_KINDS = [ 'contact', 'gmail', 'browser', 'file', 'facebook' ]
+ALL_ITEM_KINDS = [ 'all', 'contact', 'gmail', 'git', 'hangouts', 'browser', 'file', ]
+MY_ITEM_KINDS = [ 'contact', 'gmail', 'git', 'hangouts', 'browser', 'file' ]
 
+MAX_LABEL_LENGTH = 42
 ADD_WORDS_MINIMUM_COUNT = 50
 
 logging.basicConfig(level=logging.INFO)
@@ -59,29 +59,23 @@ class Graph:
         self.add_result('all', len(all_items), all_items, duration)
         for kind in MY_ITEM_KINDS:
             items = [item for item in all_items if item.kind in ('label', kind)]
-            if kind == 'facebook':
-                items.extend([
-                    item
-                    for item in all_items
-                    if item.get('domain','') in facebook.DOMAINS
-                ])
             self.add_result(kind, len(items), items, duration)
 
     def get_graph(self, kind, keep_duplicates):
         self.my_pool.wait_completion()
         found_items = self.search_results['all' if kind in ['contact', 'file'] else kind]
-        add_words = len(found_items) < ADD_WORDS_MINIMUM_COUNT or kind in ['browser', 'facebook']
+        add_words = len(found_items) < ADD_WORDS_MINIMUM_COUNT or kind == 'browser'
         edges, items = classify.get_edges(self.query, found_items, MY_EMAIL_ADDRESS, add_words, keep_duplicates)
         if kind in ['contact', 'file']:
             items = [item for item in items if item.kind == kind]
         removed_item_count = max(0, len(found_items) - len(items))
 
-        if Storage.stats['search_time'] > 10:
-            msg = 'Searching took %.1fs. Reboot may make it faster.' % Storage.stats['search_time']
-            label = classify.Label(msg)
-            label.font_size = 24
-            label.color = 'red'
-            items.append(label)
+        for item in items:
+            if len(item.label) > MAX_LABEL_LENGTH:
+                cutoff = round(MAX_LABEL_LENGTH / 2)
+                head = item.label[:cutoff]
+                tail = item.label[-cutoff:] 
+                item.label = "%s...%s" % (head, tail)
 
         nodes_index = dict((item.uid, n) for n, item in enumerate(items))
         label_index = dict((item.label, n) for n, item in enumerate(items))
@@ -96,7 +90,7 @@ class Graph:
                 'stroke': 1,
             }
             for item1, item2 in edges
-            if item1.uid in nodes_index and item2.uid in nodes_index
+            if item1 and item1.uid in nodes_index and item2 and item2.uid in nodes_index
         ]
 
         stats = {
