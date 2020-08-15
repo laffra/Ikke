@@ -84,7 +84,7 @@ def load_repo(path):
             "label": "%s - %s - %s - %s - %s" % (url, commit.hash, commit.author.name, commit.author.email, commit.msg),
             "author": [ commit.author.name, commit.author.email],
             "committer": [ commit.committer.name, commit.committer.email],
-            "timestamp": commit.committer_date.timestamp(),
+            "timestamp": commit.committer_date.timestamp() / 1000,
             "project": [commit.project_name, commit.project_path],
             "message": "%s - %s" % (commit.project_name, commit.msg),
             "changes": [

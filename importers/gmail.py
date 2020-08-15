@@ -194,7 +194,7 @@ class GMail():
         payload = msg['payload']
         headers = payload['headers']
         subject = self.decode_header(headers.get('Subject', msg.get("snippet", "")))
-        timestamp = headers['Date']
+        timestamp = (headers['Date'] or int(msg.get("internalDate", "0"))) / 1000
         content_type, url_domains, body = self.get_body(msg)
         label, words, rest = self.parse_email_text(subject, body)
         who = headers.get('To') or headers.get('From')
@@ -223,6 +223,7 @@ class GMail():
             'url_domains': url_domains,
             'files': files,
         })
+        print("%s %10s '%s'" % (timestamp, kind, subject))
 
     def parse_headers(self, part):
         headers = dict([

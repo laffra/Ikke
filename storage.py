@@ -112,10 +112,19 @@ class Storage:
             for index in ITEM_KINDS
             if index != "file"
         ]))
-        results = list(filter(None, [cls.resolve(hit["_source"]) for hit in hits]))
-        logger.info("Found %d results for '%s'" % (len(results), query))
+        since = (datetime.datetime.now() - datetime.timedelta(days=days)).timestamp()
+        sources = list(filter(None, [hit["_source"] for hit in hits]))
+        results = [cls.resolve(source) for source in sources if cls.after(source, since)]
+        logger.info("Found %d results for '%s' since %s" % (len(results), query, since))
         cls.record_search_stats(query, time.time() - search_start, len(results))
         return results
+
+    @classmethod
+    def after(cls, obj, after_timestamp):
+        when = int(obj["timestamp"])
+        if obj["kind"] == "git":
+            logger.info("     %12s %s  %s %s %s" % (obj["kind"], when, after_timestamp, when-after_timestamp, when > after_timestamp))
+        return when > after_timestamp
     
     @classmethod
     def wildcard(cls, query):
