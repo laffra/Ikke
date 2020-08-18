@@ -10,7 +10,7 @@ var ALPHA_WARMUP = 0.05
 var ALPHA_SHAKE = 0.1
 var ALPHA_DRAG = 0.0001
 var ALPHA_DRAG_START = 0.1
-var ALPHA_WARMUP_COUNT = 7
+var ALPHA_WARMUP_COUNT = 1
 
 function init_tabs() {
     $('#tabs')
@@ -49,6 +49,10 @@ function set_preference(key, value) {
 
 function show_duplicates() {
     document.location = "/?d=1&q=" + localStorage.query;
+}
+
+function hide_duplicates() {
+    document.location = "/?q=" + localStorage.query;
 }
 
 function settings() {
@@ -225,8 +229,9 @@ function update_summary(kind, graph) {
 
     var count = graph.nodes.filter(function(node) { return node.kind != 'label'; }).length;
     var stats = graph.stats;
-    var removed = !stats.removed ? '' :
-        ', with <a href=# class="removed-' + kind + '">' + stats.removed + ' similar results</a> removed,';
+    var scope = stats.removed
+        ? ', with <a href=# class="removed-' + kind + '">' + stats.removed + ' similar results</a> removed,'
+        : ', with <a href=# class="included-' + kind + '"> all results</a> showing,';
     $('#summary-' + kind).empty().append(
         $('<span>').text('Showing ' + count + ' results for '),
         $('<span>')
@@ -245,7 +250,7 @@ function update_summary(kind, graph) {
                 ])
                 .val(get_preference('duration', 'month'))),
         $('<span>')
-            .html(removed),
+            .html(scope),
         $('<span>')
             .text(' as a '),
         $('<span>')
@@ -261,12 +266,13 @@ function update_summary(kind, graph) {
                 .val(get_preference('rendertype', 'graph'))),
     );
     $('.removed-' + kind).click(show_duplicates);
+    $('.included-' + kind).click(hide_duplicates);
 
     if (get_preference('rendertype', 'graph') === "graph") {
         $(".zoom-buttons")
             .css('display', "inline-block");
     }
-    $('#dashboard-node-count').text('N:' + graph.nodes.length);
+    $('#dashboard-node-count').text('Count:' + graph.nodes.length);
     size_selects();
 }
 
@@ -294,7 +300,7 @@ function load_graph(kind, w, h) {
         current_zoom_scale = d3.event.transform.k;
         g.style("stroke-width", 1.5 / d3.event.transform.k + "px");
         g.attr("transform", d3.event.transform);
-        $('#dashboard-zoom-scale').text('Z:' + Number(current_zoom_scale).toFixed(2));
+        $('#dashboard-zoom-scale').text('Zoom:' + Number(current_zoom_scale).toFixed(2));
     }
 
     d3.selectAll('#zoom-in-' + kind).on('click', function() {
@@ -309,14 +315,10 @@ function load_graph(kind, w, h) {
         svg.attr("width", w - 2 * $('.logo').width() - 96)
            .attr("height", h + TOP_HEIGHT);
         clear_spinner(kind, error, graph);
-        $('#dashboard-memory').text('M:' + graph.stats.memory);
-        $('#dashboard-items-read').text('R:' + (graph.stats.items_read || 0));
-        $('#dashboard-results').text('#F:' + (graph.stats.results || 0));
-        $('#dashboard-raw-results').text('#R:' + (graph.stats.raw_results || 0));
-        $('#dashboard-search-time').text('tS:' + Number((graph.stats.search_time || 0)).toFixed(1) + 's');
-        $('#dashboard-resolve-time').text('tR:' + Number((graph.stats.resolve_time || 0)).toFixed(1) + 's');
-        $('#dashboard-files').text('F:' + (graph.stats.files || 0));
-        $('#dashboard-searches').text('S:' + (graph.stats.searches || 0));
+        $('#dashboard-memory').text('Memory:' + graph.stats.memory);
+        $('#dashboard-results').text('Total:' + (graph.stats.results || 0));
+        $('#dashboard-search-time').text('Duration:' + Number((graph.stats.search_time || 0)).toFixed(1) + 's');
+        $('#dashboard-files').text('Files:' + (graph.stats.files || 0));
         update_summary(kind, graph);
 
         zoom.scaleTo(svg, current_zoom_scale = Math.min(1, Math.min(w,h)/graph.nodes.length/15));
@@ -568,6 +570,21 @@ function load_graph(kind, w, h) {
 }
 
 function launch(obj) {
+    if (obj.kind == "file") {
+        open_file(obj);
+    } else {
+        render_in_window(obj);
+    } 
+}
+
+function open_file(obj) {
+    console.log("Open", obj);
+    $.get("open?path=" + obj["path"], function() {
+        console.log("Opened", obj);
+    });
+}
+
+function render_in_window(obj) {
     const protocol = window.location.protocol;
     const host = window.location.hostname;
     const port = window.location.port;

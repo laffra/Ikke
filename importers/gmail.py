@@ -1,6 +1,7 @@
 import base64
 from collections import Counter
 from importers import contact
+from importers import file
 from cache import Cache
 import datetime
 import email
@@ -28,7 +29,7 @@ from google.auth.transport.requests import Request
 
 MAXIMUM_DAYS_LOAD = 3650
 MAXIMUM_THREAD_COUNT = 15
-URL_MATCH_RE = re.compile('https?://[\w\d:#@%/;$()~_?\+-=\.&]*')
+URL_MATCH_RE = re.compile(r'https?://[\w\d:#@%/;$()~_?\+-=\.&]*')
 DATESTRING_RE = re.compile(' [-+].*')
 CLEANUP_FILENAME_RE = re.compile('[<>@]')
 MY_EMAIL_ADDRESS = ChromePreferences().get_email()
@@ -94,6 +95,8 @@ class GMail():
             if not disposition or not disposition.startswith('attachment;'):
                 continue
             filename = part["filename"]
+            if not filename:
+                continue
             attachmentId = part["body"]["attachmentId"]
             attachment = service.users().messages().attachments().get(
                 userId = "me",
@@ -101,19 +104,11 @@ class GMail():
                 messageId = msg["id"]
             ).execute()
 
-            file_data = base64.urlsafe_b64decode(attachment['data'].encode('UTF-8'))
-            path = self.get_attachment_path(msg['uid'], filename)
-            if filename and file_data:
-                storage.Storage.add_binary_data(
-                    file_data,
-                    {
-                        'uid': path,
-                        'kind': 'file',
-                        'timestamp': timestamp,
-                    })
-                files.append(filename)
-                settings.increment('file/count')
-                logger.debug('Attachment: %s',  path)
+            data = base64.urlsafe_b64decode(attachment['data'].encode('UTF-8'))
+            if not data:
+                continue
+            file.save_file(msg['uid'], filename, timestamp, data)
+            files.append(filename)
         return files
 
     @classmethod
@@ -223,7 +218,6 @@ class GMail():
             'url_domains': url_domains,
             'files': files,
         })
-        print("%s %10s '%s'" % (timestamp, kind, subject))
 
     def parse_headers(self, part):
         headers = dict([
@@ -329,13 +323,12 @@ class GMailNode(storage.Data):
         return related
 
     def get_related_items(self):
-        return []
         dir = os.path.join(utils.ITEMS_DIR, 'file', utils.cleanup_filename(self.uid))
         files = [
-            storage.Storage.load_item(os.path.join(dir, path))
-            for path in self.files
-            if os.path.exists(os.path.join(dir, path))
+            file.load_file(self.uid, filename)
+            for filename in self.files
         ]
+        logger.info("add related items for %s" + self.label)
         return super(GMailNode, self).get_related_items() + files + self.persons
 
     def __eq__(self, other):

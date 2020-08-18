@@ -95,14 +95,16 @@ span.name {
     height: 24px;
 }
 
+.header {
+    margin-top: 32px;
+}
 
 .logo {
     padding: 12px 0;
     font-family: Arial;
     vertical-align: top;
     white-space: nowrap;
-    width: 53px;
-    font-size: 18px;
+    font-size: 27px;
     cursor: pointer;
     display: inline;
 }
@@ -110,37 +112,37 @@ span.name {
 .logo .t1 {
     font-weight: bold;
     color: #0057e7;
-    font-size: 22px;
+    font-size: 27px;
 }
 
 .logo .t2 {
     font-weight: bold;
     color: #ffa700;
-    font-size: 22px;
+    font-size: 27px;
 }
 
 .logo .t3 {
     font-weight: bold;
     color: #d62d20;
-    font-size: 22px;
+    font-size: 27px;
 }
 
 .logo .t4 {
     font-weight: bold;
     color: #35a853;
-    font-size: 22px;
+    font-size: 27px;
 }
 
 .title {
     margin-left: 26px;
     font-family: Arial;
-    font-size: 18px;
+    font-size: 25px;
 }
 
 #ikke-settings {
     border: 2px solid grey;
     border-width: 2px 0 0 0 ;
-    margin-top: 15px;
+    margin-top: 18px;
     padding-top: 15px;
     display: none;
 }

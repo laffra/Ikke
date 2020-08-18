@@ -17,25 +17,8 @@ import utils
 import time
 from collections import defaultdict
 
-FILE_FORMAT_ICONS = {
-    'pdf': 'icons/pdf-icon.png',
-    'rtf': 'icons/rtf-icon.png',
-    'doc': 'icons/word-doc-icon.png',
-    'docx': 'icons/word-doc-icon.png',
-    'ics': 'icons/calendar-icon.png',
-    'xls': 'icons/excel-xls-icon.png',
-    'xlsx': 'icons/excel-xls-icon.png',
-    'pages': 'icons/keynote-icon.png',
-    'ppt': 'icons/ppt-icon.png',
-    'ico': 'icons/ico.png',
-    'tiff': 'icons/tiff-icon.png',
-    'pptx': 'icons/ppt-icon.png',
-    'www': 'icons/browser-web-icon.png',
-    'txt': 'icons/text-icon.png',
-    'file': 'icons/file-icon.png',
-}
-FILE_FORMAT_IMAGE_EXTENSIONS = { 'png', 'ico', 'jpg', 'jpeg', 'gif', 'pnm' }
 ITEM_KINDS = [ 'contact', 'gmail', 'hangouts', 'git', 'browser', 'file' ]
+SEARCH_KINDS = [ 'contact', 'gmail', 'hangouts', 'git', 'browser' ]
 INDEX = "insights"
 MAX_NUMBER_OF_ITEMS = 1000
 
@@ -67,60 +50,41 @@ class Storage:
         return local_path
 
     @classmethod
-    def add_binary_data(cls, content, data):
-        assert 'kind' in data, "Kind needed"
-        assert 'uid' in data, "UID needed"
-        assert 'timestamp' in data, "Timestamp needed"
-        assert type(data['timestamp']) in (int,float), "Number timestamp needed, not %s" % type(data['timestamp'])
-        path = cls.get_local_path(data)
-        logger.debug('write %s' % path)
-        for k,v in data.items():
-            logger.debug('     %09s %s' % (k, v))
-        try:
-            with open(path, "wb") as fout:
-                cls.stats['writes'] += 1
-                fout.write(content)
-            os.utime(path, (data['timestamp'], data['timestamp']))
-            if path in cls.file_cache:
-                del cls.file_cache[path]
-        except IOError as e:
-            logger.error('Cannot add file. Path len = %d: %s' % (len(path), e))
-            raise
-
-    @classmethod
-    def search(cls, query, days=1, doc_type=None):
+    def search(cls, query, days=1):
         # type: (str,int,str) -> list
         assert isinstance(query, str)
         assert isinstance(days, int), 'unexpected type %s: %s' % (type(days), days)
         cls.stats = defaultdict(int)
         search_start = time.time()
-        hits = list(itertools.chain(*[
-            cls.elastic_client.search(
-                index=index,
-                doc_type=doc_type,
-                size=MAX_NUMBER_OF_ITEMS,
-                body={
-                    "query": {
-                        "query_string": {
-                            "query": cls.wildcard(query),
-                            "fuzziness": "2",
-                            "default_field": "*"
-                        }
-                    }
-                }
-            )["hits"]["hits"]
-            for index in ITEM_KINDS
-            if index != "file"
-        ]))
+        hits = list(itertools.chain(*[cls.search_index(index, query) for index in SEARCH_KINDS]))
         since = (datetime.datetime.now() - datetime.timedelta(days=days)).timestamp()
-        sources = list(filter(None, [hit["_source"] for hit in hits]))
-        results = [cls.resolve(source) for source in sources if cls.after(source, since)]
+        results = [cls.resolve(hit) for hit in hits if cls.relevant(hit, since)]
         logger.info("Found %d results for '%s' since %s" % (len(results), query, since))
         cls.record_search_stats(query, time.time() - search_start, len(results))
         return results
 
     @classmethod
-    def after(cls, obj, after_timestamp):
+    def search_index(cls, index, query):
+        hits = cls.elastic_client.search(
+            index=index,
+            size=MAX_NUMBER_OF_ITEMS,
+            body={
+                "query": {
+                    "query_string": {
+                        "query": cls.wildcard(query),
+                        "fuzziness": "2",
+                        "default_field": "*"
+                    }
+                }
+            }
+        )["hits"]["hits"]
+        sources = list(filter(None, [hit["_source"] for hit in hits]))
+        return sources
+
+    @classmethod
+    def relevant(cls, obj, after_timestamp):
+        if obj["kind"] == "browser" and obj["url"].startswith("file:"):
+            return False
         when = int(obj["timestamp"])
         if obj["kind"] == "git":
             logger.info("     %12s %s  %s %s %s" % (obj["kind"], when, after_timestamp, when-after_timestamp, when > after_timestamp))
@@ -292,7 +256,6 @@ class Storage:
         import threading
         if os.path.exists(path) and path.startswith(utils.ITEMS_DIR):
             tmpdir = tempfile.mkdtemp()
-            print('mv to tmpdir: ' + tmpdir)
             shutil.move(path, tmpdir)
             threading.Thread(target=lambda: shutil.rmtree(tmpdir)).start()
         time.sleep(0.5)
@@ -338,9 +301,6 @@ class Data(dict):
     def __hash__(self):
         return hash(self.uid)
 
-    def matches(self, query_words):
-        return True
-
     def is_related_item(self, other):
         return other in self.related_items
 
@@ -365,49 +325,6 @@ class Data(dict):
     def save(self):
         Storage.stats['writes'] += 1
         Storage.add_data(self)
-
-
-class File(Data):
-    def __init__(self, path):
-        super(File, self).__init__(path)
-        self.kind = 'file'
-        self.color = 'blue'
-        self.path = path
-        filename = os.path.basename(path)
-        self.words = stopwords.remove_stopwords(filename.replace('+', ' '))
-        self.filename = filename
-        self.uid = filename
-        self.label = filename.replace('%20', ' ')
-        self.timestamp = os.path.getmtime(path)
-        extension = os.path.splitext(path)[1][1:].lower()
-        self.icon_size = 32
-        self.zoomed_icon_size = 128
-        icon = FILE_FORMAT_ICONS.get(extension, 'icons/file-icon.png')
-        if extension in FILE_FORMAT_IMAGE_EXTENSIONS:
-            icon = path
-            self.icon_size = 64;
-            self.zoomed_icon_size = 256
-        self.icon = 'get?path=%s' % icon
-        dict.update(self, vars(self))
-        self.set_message_id(path)
-
-    def matches(self, query_words):
-        for word in query_words:
-            if not word in self.filename:
-                return False
-        return True
-
-    def same_path(self, path):
-        logger.debug('Same path?', self.path[:len(utils.FILE_DIR)], path)
-        return self.path[:len(utils.FILE_DIR)] == path
-
-    def set_message_id(self, path):
-        self.message_id = os.path.basename(os.path.dirname(path))
-
-    def update_words(self, items):
-        for item in items:
-            if item.kind == 'gmail' and item.message_id == self.message_id:
-                self.words = item.words
 
 
 item_handlers.update({

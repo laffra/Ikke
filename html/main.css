@@ -28,6 +28,7 @@ image {
     white-space: nowrap;
     width: 53px;
     font-size: 27px;
+    margin-top: 32px;
 }
 
 .logo .t1 {
@@ -372,13 +373,14 @@ table.ui-table tr:hover {
 
 #dashboard {
     position: absolute;
-    top: -7px;
-    left: 10px;
+    top: 0px;
+    right: 0px;
+    margin: 4px;
     opacity: .3;
 }
 
 #dashboard span {
-    font-size: 9px;
+    font-size: 18px;
     margin: 0 2px;
 }
 

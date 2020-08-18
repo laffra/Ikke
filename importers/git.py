@@ -43,6 +43,8 @@ class GitCommit(storage.Data):
         self.icon_size = 24
         self.font_size = 10
         self.zoomed_icon_size = 24
+        self.hash = obj["hash"]
+        self.url = obj["url"]
         self.message = obj["message"]
         self.label = obj["message"]
         self.author = obj["author"]
@@ -51,6 +53,7 @@ class GitCommit(storage.Data):
         self.project = obj["project"]
         self.changes = obj["changes"]
         dict.update(self, vars(self))
+        logger.info("hash: " + self.hash)
 
     @classmethod
     def deserialize(cls, obj):
@@ -62,6 +65,11 @@ class GitCommit(storage.Data):
 
 def cleanup():
     pass
+
+
+def render(args):
+    logger.info("render %s" % json.dumps(args, indent=4))
+    return '<script>document.location=\'%s/commit/%s\';</script>' %  (args["url"], args["hash"])
 
 
 settings['git/can_load_more'] = True
@@ -84,7 +92,7 @@ def load_repo(path):
             "label": "%s - %s - %s - %s - %s" % (url, commit.hash, commit.author.name, commit.author.email, commit.msg),
             "author": [ commit.author.name, commit.author.email],
             "committer": [ commit.committer.name, commit.committer.email],
-            "timestamp": commit.committer_date.timestamp() / 1000,
+            "timestamp": commit.committer_date.timestamp(),
             "project": [commit.project_name, commit.project_path],
             "message": "%s - %s" % (commit.project_name, commit.msg),
             "changes": [

@@ -3,8 +3,7 @@ import itertools
 import logging
 import storage
 
-MOST_COMMON_COUNT = 21
-ITEMS_PER_DOMAIN = 21
+MOST_COMMON_COUNT = 41
 ADD_CONTENT_LABELS = False
 
 logger = logging.getLogger(__name__)
@@ -65,7 +64,7 @@ def add_related_items(items, me):
         for item in items
         for item1, item2 in itertools.combinations([item] + item.get_related_items(), 2)
     }
-    return edges, list(set(list(items) + related_items))
+    return edges, list(items) + related_items
 
 
 def remove_duplicates(items, keep_duplicates):
@@ -100,14 +99,18 @@ def get_most_common_words(query, items):
 def get_edges(query, items, me='', add_words=False, keep_duplicates=False):
     # type(str, list, str, bool) -> (list, list)
     edges, items = add_related_items(items, me)
+    logging.info("Create graph for %d edges and %d items" % (len(edges), len(items)))
+    for n,item in enumerate(items, 1):
+        logger.debug(" %d:  %s" % (n, item.label))
     if add_words:
+        before = len(items)
         items.extend(Label(word) for word in get_most_common_words(query, items))
+        logging.info("Added %d labels" % (len(items) - before))
     items = remove_duplicates(items, keep_duplicates)
-    if True:
-        for item1, item2 in itertools.combinations(items, 2):
-            if item1.is_related_item(item2) or item2.is_related_item(item1):
-                if not item2.duplicate:
-                    edges.add((item1, item2))
+    for item1, item2 in itertools.combinations(items, 2):
+        if item1.is_related_item(item2) or item2.is_related_item(item1):
+            if not item2.duplicate:
+                edges.add((item1, item2))
     return list(edges), items
 
 

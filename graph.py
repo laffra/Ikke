@@ -27,7 +27,7 @@ ALL_ITEM_KINDS = [ 'all', 'contact', 'gmail', 'git', 'hangouts', 'browser', 'fil
 MY_ITEM_KINDS = [ 'contact', 'gmail', 'git', 'hangouts', 'browser', 'file' ]
 
 MAX_LABEL_LENGTH = 42
-ADD_WORDS_MINIMUM_COUNT = 50
+ADD_WORDS_MINIMUM_COUNT = 100
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -64,7 +64,7 @@ class Graph:
     def get_graph(self, kind, keep_duplicates):
         self.my_pool.wait_completion()
         found_items = self.search_results['all' if kind in ['contact', 'file'] else kind]
-        add_words = len(found_items) < ADD_WORDS_MINIMUM_COUNT or kind == 'browser'
+        add_words = True
         edges, items = classify.get_edges(self.query, found_items, MY_EMAIL_ADDRESS, add_words, keep_duplicates)
         if kind in ['contact', 'file']:
             items = [item for item in items if item.kind == kind]

@@ -19,10 +19,10 @@ from urllib.request import urlopen
 import jinja2
 import json
 import os
+import subprocess
 import traceback
 import threading
 import utils
-import webbrowser
 
 
 logger = logging.getLogger('server')
@@ -51,6 +51,7 @@ class Server(BaseHTTPRequestHandler):
             '/save_image': self.save_image,
             '/extensions': self.extensions,
             '/get': self.get_resource,
+            '/get_image': self.get_image,
             '/render': self.render,
             '/open': self.open_local,
             '/settings': self.settings,
@@ -58,8 +59,9 @@ class Server(BaseHTTPRequestHandler):
             '/search': self.search,
             '/graph': self.get_graph,
             '/poll': self.poll,
+            '/favicon.ico': self.favicon,
         }
-        logger.info('GET %s' % self.path)
+        logger.debug('GET %s' % self.path)
         self.parse_args()
         routes.get(self.path, self.get_file)()
 
@@ -148,10 +150,20 @@ class Server(BaseHTTPRequestHandler):
         kind = self.args['kind']
         logger.info('get graph for %s: %s', kind, query)
         graph = self.graphs[query].get_graph(kind, keep_duplicates)
+        logger.debug("Graph: %s" % json.dumps(graph, indent=4))
         self.respond(json.dumps(graph))
+
+    def favicon(self):
+        self.args["path"] = 'icons/favicon.ico'
+        return self.get_resource()
 
     def get_resource(self):
         path = os.path.join(utils.INSTALL_FOLDER, 'html', self.args['path'])
+        self.respond(self.load_resource(path, 'rb'))
+
+    def get_image(self):
+        path = os.path.join(utils.FILE_DIR, self.args['path'])
+        logging.info("get image %s" % path)
         self.respond(self.load_resource(path, 'rb'))
 
     def render(self):
@@ -186,7 +198,9 @@ class Server(BaseHTTPRequestHandler):
         self.respond(html)
 
     def open_local(self):
-        webbrowser.open('file://%s' % self.args['path'].replace(' ', '\\ '))
+        path = os.path.join(utils.FILE_DIR, self.args["path"])
+        logging.info("Open %s" % path)
+        subprocess.call(['open', path])
 
     def save_image(self):
         browser.save_image(
@@ -230,6 +244,7 @@ if __name__ == '__main__':
     threaded_server = ThreadedHTTPServer(('localhost', port), Server)
     # poller.start()
     url = 'http://localhost:%d/settings' % port
+    import webbrowser
     webbrowser.open(url, autoraise=False)
     settings['port'] = port
     if settings['browser/count'] < 100:

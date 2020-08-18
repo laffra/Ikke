@@ -29,6 +29,7 @@ META_DOMAINS = {
     '//photos.google.com/search',
     '//linkedin.com/search',
     '//search.ikke.io',
+    '//file:',
     '//localhost:',
     '//127.0.0.1:',
 }
@@ -177,7 +178,6 @@ class BrowserItem(storage.Data):
         self.zoomed_icon_size = 256 if self.image else 24
         self.node_size = 1
         dict.update(self, vars(self))
-        print(json.dumps(self, indent=4))
 
     @classmethod
     def deserialize(cls, obj):
@@ -222,7 +222,6 @@ settings['browser/can_delete'] = True
 deserialize = BrowserItem.deserialize
 
 if __name__ == '__main__':
-    # print(history())
     logging.basicConfig(level=logging.INFO)
     load_history()
     for n,obj in enumerate(Storage.search('reddit', days=100000)):
