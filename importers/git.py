@@ -52,8 +52,9 @@ class GitCommit(storage.Data):
         self.timestamp = obj["timestamp"]
         self.project = obj["project"]
         self.changes = obj["changes"]
+        words = (self.message + ' ' + ' '.join(self.author)).split(' ')
+        self.words = list(set(word.lower() for word in words))
         dict.update(self, vars(self))
-        logger.info("hash: " + self.hash)
 
     @classmethod
     def deserialize(cls, obj):

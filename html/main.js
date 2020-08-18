@@ -12,6 +12,16 @@ var ALPHA_DRAG = 0.0001
 var ALPHA_DRAG_START = 0.1
 var ALPHA_WARMUP_COUNT = 1
 
+var altKeyPressed = false;
+
+$(document).keydown(function(event){
+    altKeyPressed = event.altKey;
+});
+$(document).keyup(function(){
+    altKeyPressed = false;
+});
+
+
 function init_tabs() {
     $('#tabs')
         .tabs({
@@ -229,9 +239,9 @@ function update_summary(kind, graph) {
 
     var count = graph.nodes.filter(function(node) { return node.kind != 'label'; }).length;
     var stats = graph.stats;
-    var scope = stats.removed
-        ? ', with <a href=# class="removed-' + kind + '">' + stats.removed + ' similar results</a> removed,'
-        : ', with <a href=# class="included-' + kind + '"> all results</a> showing,';
+    var action = stats.removed
+        ? '. Dive deeper: <a href=# class="removed-' + kind + '">Show' + stats.removed + ' similar results</a>.'
+        : '. Zoom out: <a href=# class="included-' + kind + '">Remove duplicate results</a>.';
     $('#summary-' + kind).empty().append(
         $('<span>').text('Showing ' + count + ' results for '),
         $('<span>')
@@ -250,8 +260,6 @@ function update_summary(kind, graph) {
                 ])
                 .val(get_preference('duration', 'month'))),
         $('<span>')
-            .html(scope),
-        $('<span>')
             .text(' as a '),
         $('<span>')
             .addClass('select-wrapper')
@@ -264,6 +272,8 @@ function update_summary(kind, graph) {
                     $('<option>').attr('value', 'grid').text('grid'),
                 ])
                 .val(get_preference('rendertype', 'graph'))),
+        $('<span>')
+            .html(action),
     );
     $('.removed-' + kind).click(show_duplicates);
     $('.included-' + kind).click(hide_duplicates);
@@ -531,7 +541,12 @@ function load_graph(kind, w, h) {
 
 
         node.on("click", function(d) {
-            launch(d);
+            if (altKeyPressed) {
+                console.log(d);
+                console.log(d.uid);
+            } else {
+                launch(d);
+            }
         });
 
         force.on("tick", function() {

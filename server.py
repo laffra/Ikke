@@ -163,7 +163,6 @@ class Server(BaseHTTPRequestHandler):
 
     def get_image(self):
         path = os.path.join(utils.FILE_DIR, self.args['path'])
-        logging.info("get image %s" % path)
         self.respond(self.load_resource(path, 'rb'))
 
     def render(self):
@@ -199,7 +198,7 @@ class Server(BaseHTTPRequestHandler):
 
     def open_local(self):
         path = os.path.join(utils.FILE_DIR, self.args["path"])
-        logging.info("Open %s" % path)
+        logger.info("Open %s" % path)
         subprocess.call(['open', path])
 
     def save_image(self):

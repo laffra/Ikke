@@ -32,6 +32,7 @@ FILE_FORMAT_ICONS = {
 FILE_FORMAT_IMAGE_EXTENSIONS = { 'png', 'ico', 'jpg', 'jpeg', 'gif', 'pnm' }
 
 def deserialize(obj):
+    logger.info(json.dumps(obj, indent=4))
     return FileItem(obj['path'])
 
 
@@ -64,7 +65,7 @@ def save_file(uid, filename, timestamp, data):
 def save_metadata(uid, filename, timestamp, data):
     metadata = {
         'kind': 'file',
-        'uid': uid,
+        'uid': "%s/%s" % (uid, filename),
         'filename': filename,
         'label': filename,
         'words': stopwords.remove_stopwords(filename.replace('+', ' ')),
@@ -120,11 +121,13 @@ class FileItem(storage.Data):
         super(FileItem, self).__init__(obj['label'])
         self.kind = 'file'
         self.color = 'blue'
+        self.filename = obj['filename']
         self.uid = obj['uid']
+        if not "/" in self.uid:
+            self.uid = "%s/%s" % (self.uid, self.filename),
         self.label = obj['label']
         self.timestamp = obj['timestamp']
         self.words = obj['words']
-        self.filename = obj['filename']
         self.path = os.path.join(obj["uid"], obj["filename"])
         self.icon = get_icon(self.path)
         self.icon_size = 44

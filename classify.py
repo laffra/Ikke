@@ -1,10 +1,12 @@
 import collections
 import itertools
 import logging
+import stopwords
 import storage
 
 MOST_COMMON_COUNT = 41
 ADD_CONTENT_LABELS = False
+    
 
 logger = logging.getLogger(__name__)
 
@@ -99,20 +101,19 @@ def get_most_common_words(query, items):
 def get_edges(query, items, me='', add_words=False, keep_duplicates=False):
     # type(str, list, str, bool) -> (list, list)
     edges, items = add_related_items(items, me)
-    logging.info("Create graph for %d edges and %d items" % (len(edges), len(items)))
+    logger.info("Create graph for %d edges and %d items" % (len(edges), len(items)))
     for n,item in enumerate(items, 1):
         logger.debug(" %d:  %s" % (n, item.label))
     if add_words:
-        before = len(items)
-        items.extend(Label(word) for word in get_most_common_words(query, items))
-        logging.info("Added %d labels" % (len(items) - before))
-    items = remove_duplicates(items, keep_duplicates)
+        items.extend(Label(word) for word in get_most_common_words(query, items) if not stopwords.is_stopword(word))
     for item1, item2 in itertools.combinations(items, 2):
         if item1.is_related_item(item2) or item2.is_related_item(item1):
-            if not item2.duplicate:
-                edges.add((item1, item2))
+            item1.edges += 1
+            item2.edges += 1
+            edges.add((item1, item2))
+    items = remove_duplicates(items, keep_duplicates)
     return list(edges), items
-
+   
 
 def debug_results(labels, items):
     show_details = False

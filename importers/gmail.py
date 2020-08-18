@@ -159,8 +159,8 @@ class GMail():
             reader = GMail()
             while settings['gmail/loading'] and day < count:
                 try:
-                    before = datetime.date.today() - datetime.timedelta(day)
-                    after = before - datetime.timedelta(1)
+                    before = datetime.date.today() + datetime.timedelta(1) - datetime.timedelta(day)
+                    after = before - datetime.timedelta(2)
                     query = "before: {0} after: {1}".format(before.strftime('%Y/%m/%d'), after.strftime('%Y/%m/%d'))
                     result = service.users().messages().list(userId="me", maxResults=1000, q=query).execute()
                     logger.info("Load {0} => {1}".format(query, len(result["messages"])))
@@ -202,6 +202,7 @@ class GMail():
         if "CHAT" in msg.get("labelIds", []):
             kind = 'hangouts'
         settings.increment('%s/count' % kind)
+        logger.info("%s %s: %s" % (datetime.datetime.fromtimestamp(timestamp), names, subject))
         storage.Storage.add_data({
             'uid': msg['uid'] or msg['Message-ID'],
             'message_id': headers.get('Message-ID', msg['uid']),
@@ -259,8 +260,9 @@ class GMail():
     def get_status(cls):
         count = settings['gmail/count']
         days = settings['gmail/days']
-        date = str((datetime.datetime.now() - datetime.timedelta(days=days + 1)).date())
-        return '%d gmail messages loaded up to %s days back to %s' % (count, days, date)
+        youngest = datetime.datetime.fromtimestamp(settings['gmail/youngest']).date()
+        oldest = datetime.datetime.fromtimestamp(settings['gmail/oldest']).date()
+        return '%d gmail messages loaded up to %s days between %s and %s' % (count, days, oldest, youngest)
 
     @classmethod
     def load(cls, days_count=1, days_start=0):
@@ -269,7 +271,15 @@ class GMail():
             days_count = MAXIMUM_DAYS_LOAD
         settings['gmail/lastload'] = time.time()
         settings['gmail/loading'] = True
-        cls.load_messages(days_count, days_start)
+
+        timestamp_youngest = settings['gmail/youngest']
+        days_count_youngest = 1 + (datetime.datetime.now() - datetime.datetime.fromtimestamp(timestamp_youngest)).days
+        cls.load_messages(days_count_youngest, 0)
+
+        timestamp_oldest = settings['gmail/oldest']
+        days_count_oldest = (datetime.datetime.now() - datetime.datetime.fromtimestamp(timestamp_oldest)).days - 1
+        # cls.load_messages(days_count, days_count_oldest)
+
         storage.Storage.stats.clear()
 
 
@@ -314,12 +324,14 @@ class GMailNode(storage.Data):
         elif other.kind == 'gmail':
             related = not self.connected and self.label == other.label
             self.connected = other.connected = True
+            self.files = other.files = list(set(self.files + other.files))
         elif self.files and other.kind == 'file':
-            related = other.filename == self.files[0]
+            related = other.filename in self.files
         elif self.persons and other.kind == 'contact':
-            related = other == self.persons[0]
+            related = other in self.persons
         else:
             related = False
+        logger.debug("related? %s %s %s %s" % (repr(self.label), self.files, repr(other.label), related))
         return related
 
     def get_related_items(self):
@@ -328,14 +340,8 @@ class GMailNode(storage.Data):
             file.load_file(self.uid, filename)
             for filename in self.files
         ]
-        logger.info("add related items for %s" + self.label)
+        logger.debug("add related items for %s" + self.label)
         return super(GMailNode, self).get_related_items() + files + self.persons
-
-    def __eq__(self, other):
-        if isinstance(other, self.__class__):
-            return self.uid == other.uid
-        else:
-            return False
 
     def is_duplicate(self, duplicates):
         if self.fingerprint in duplicates:
@@ -390,6 +396,6 @@ if __name__ == '__main__':
     # load(1, 0, True)
     # load(3650, 0, True)
     GMail.load(8, 7)
-    # logging.info('History: %s' % history())
+    # logger.info('History: %s' % history())
     # poll()
 

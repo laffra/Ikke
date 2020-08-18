@@ -1,12 +1,14 @@
 from collections import defaultdict
 import logging
 from urllib.parse import unquote
+import json
 import time
 from importers import browser
 from importers import contact
 from importers import gmail
 import classify
 from preferences import ChromePreferences
+import os
 import utils
 from threadpool import ThreadPool
 from storage import Storage
@@ -28,6 +30,9 @@ MY_ITEM_KINDS = [ 'contact', 'gmail', 'git', 'hangouts', 'browser', 'file' ]
 
 MAX_LABEL_LENGTH = 42
 ADD_WORDS_MINIMUM_COUNT = 100
+REDUCE_GRAPH_SIZE = False
+
+IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'tiff', 'png', 'raw']
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -44,16 +49,14 @@ class Graph:
         ])
 
     def add_result(self, kind, count, items, duration):
-        self.search_results[kind] = set(self.search_results[kind] + list(items))
+        self.search_results[kind] = set(filter(None, self.search_results[kind] + list(items)))
         self.search_count[kind] = count
         self.search_duration[kind].append(duration)
         logger.debug('found %d of %s items' % (len(items), kind))
-        for n,item in enumerate(items):
-            logger.debug('  %d: %s %s uid=%s', n, item.kind, repr(item.label), repr(item.uid))
 
     def search(self, timestamp):
         start_time = time.time()
-        all_items = Storage.search(unquote(self.query), timestamp)
+        all_items = list(filter(None, Storage.search(unquote(self.query), timestamp)))
 
         duration = time.time() - start_time
         self.add_result('all', len(all_items), all_items, duration)
@@ -66,9 +69,16 @@ class Graph:
         found_items = self.search_results['all' if kind in ['contact', 'file'] else kind]
         add_words = True
         edges, items = classify.get_edges(self.query, found_items, MY_EMAIL_ADDRESS, add_words, keep_duplicates)
+        removed_item_count = 0
+        for item in found_items:
+            if not item in items:
+                removed_item_count += 1
         if kind in ['contact', 'file']:
             items = [item for item in items if item.kind == kind]
-        removed_item_count = max(0, len(found_items) - len(items))
+        if REDUCE_GRAPH_SIZE:
+            items = self.remove_lonely_images(items)
+            items = self.remove_lonely_labels(items)
+            items = self.remove_labels(items)
 
         for item in items:
             if len(item.label) > MAX_LABEL_LENGTH:
@@ -99,6 +109,7 @@ class Graph:
             'memory': utils.get_memory()
         }
         stats.update(Storage.stats)
+        logger.info("Graph stats: %s" % json.dumps(stats))
         if kind == 'all':
             browser.cleanup()
             gmail.cleanup()
@@ -112,3 +123,25 @@ class Graph:
             'directed': False,
             'stats': stats
         }
+
+    def remove_labels(self, items):
+        return [item for item in items if item.kind != 'label']
+
+
+    def remove_lonely_images(self, items):
+        return [item for item in items if not self.is_lonely_image(item)]
+
+
+    def remove_lonely_labels(self, items):
+        return [item for item in items if not self.is_lonely_label(item)]
+
+
+    def is_lonely_image(self, item):
+        if item.kind != "file":
+            return False
+        _, extension = os.path.splitext(item.path)
+        return extension[1:].lower() in IMAGE_EXTENSIONS
+
+
+    def is_lonely_label(self, item):
+        return item.kind == "label" and item.edges == 0

@@ -190,7 +190,8 @@ class BrowserItem(storage.Data):
         obj['title'] = obj.get('title', self.title)
         obj['image'] = self.image or obj['image']
         if self.words:
-            obj['words'] = list(set(self.words + obj['words']))
+            words = list(set(self.words + obj['words']))
+            obj['words'] = ' '.join(stopwords.remove_stopwords(' '.join(words)))
 
     def is_related_item(self, other):
         return False

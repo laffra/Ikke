@@ -50,30 +50,40 @@ class Storage:
         return local_path
 
     @classmethod
-    def search(cls, query, days=1):
+    def search(cls, query, days=0):
         # type: (str,int,str) -> list
         assert isinstance(query, str)
         assert isinstance(days, int), 'unexpected type %s: %s' % (type(days), days)
         cls.stats = defaultdict(int)
         search_start = time.time()
-        hits = list(itertools.chain(*[cls.search_index(index, query) for index in SEARCH_KINDS]))
         since = (datetime.datetime.now() - datetime.timedelta(days=days)).timestamp()
-        results = [cls.resolve(hit) for hit in hits if cls.relevant(hit, since)]
-        logger.info("Found %d results for '%s' since %s" % (len(results), query, since))
+        hits = cls.search_indexes(query, since)
+        results = list(filter(None, [cls.resolve(hit) for hit in hits if cls.relevant(hit)]))
+        logger.info("Found %d results for '%s' since %s" % (len(results), query, datetime.datetime.fromtimestamp(since)))
         cls.record_search_stats(query, time.time() - search_start, len(results))
         return results
 
     @classmethod
-    def search_index(cls, index, query):
+    def search_indexes(cls, query, since):
         hits = cls.elastic_client.search(
-            index=index,
             size=MAX_NUMBER_OF_ITEMS,
             body={
                 "query": {
-                    "query_string": {
-                        "query": cls.wildcard(query),
-                        "fuzziness": "2",
-                        "default_field": "*"
+                    "bool": {
+                        "must": {
+                            "query_string": {
+                                "query": cls.wildcard(query),
+                                "fuzziness": "2",
+                                "default_field": "*"
+                            }
+                        },
+                        "filter": {
+                            "range": {
+                                "timestamp": {
+                                    "gte": since
+                                } 
+                            }
+                        }
                     }
                 }
             }
@@ -82,13 +92,44 @@ class Storage:
         return sources
 
     @classmethod
-    def relevant(cls, obj, after_timestamp):
+    def load_stats(cls):
+        result = cls.elastic_client.search(
+            size=1,
+            body={
+                "size": 20,
+                "aggregations": {
+                    "byindex": {
+                        "terms": {
+                            "field": "_index",
+                            "size": 20
+                        },
+                        "aggregations": {
+                            "min": {
+                                "min": {
+                                    "field": "timestamp"
+                                }
+                            },
+                            "max": {
+                                "max": {
+                                    "field": "timestamp"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        )
+        for bucket in result["aggregations"]["byindex"]["buckets"]:
+            kind = bucket["key"]
+            settings["%s/youngest" % kind] = bucket["max"]["value"]
+            settings["%s/oldest" % kind] = bucket["min"]["value"]
+            settings["%s/count" % kind] = bucket["doc_count"]
+
+    @classmethod
+    def relevant(cls, obj):
         if obj["kind"] == "browser" and obj["url"].startswith("file:"):
             return False
-        when = int(obj["timestamp"])
-        if obj["kind"] == "git":
-            logger.info("     %12s %s  %s %s %s" % (obj["kind"], when, after_timestamp, when-after_timestamp, when > after_timestamp))
-        return when > after_timestamp
+        return True
     
     @classmethod
     def wildcard(cls, query):
@@ -140,7 +181,7 @@ class Storage:
 
     @classmethod
     def to_item(cls, obj):
-        if not "kind" in obj:
+        if not "kind" in obj or obj["kind"] == "file":
             return None
         handler = item_handlers[obj['kind']]
         return handler.deserialize(obj)
@@ -291,6 +332,7 @@ class Data(dict):
         self.timestamp = 0
         self.related_items = []
         self.duplicate = False
+        self.edges = 0
 
         dict.update(self, vars(self))
         if obj:
@@ -349,3 +391,6 @@ if __name__ == '__main__':
     if True:
         print(json.dumps(Storage.get_all('browser'), indent=4))
         print(Storage.search('insights'))
+
+
+Storage.load_stats()
