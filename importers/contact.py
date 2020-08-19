@@ -38,8 +38,6 @@ def find_contact(email, name='', phones=None, timestamp=None):
     email = remove_quotes(email)
     contact = contacts_cache.get(email)
     if not contact:
-        contact = storage.Storage.search_contact(email)
-    if not contact:
         contact = Contact({
             'kind': 'contact',
             'uid': email,
@@ -109,6 +107,10 @@ class Contact(storage.Data):
     def render(self, query):
         url = '/?q=%s' % quote(self.label)
         return '<html><a href="%s">Search in Ikke</a>' % url
+
+    def __repr__(self):
+        return "<Contact %s>" % self.email
+
 
 
 deserialize = Contact.deserialize

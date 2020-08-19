@@ -102,6 +102,7 @@ class Graph:
             for item1, item2 in edges
             if item1 and item1.uid in nodes_index and item2 and item2.uid in nodes_index
         ]
+        logger.info("Found %d links for %d edges" % (len(links), len(edges)))
 
         stats = {
             'found': len(found_items),

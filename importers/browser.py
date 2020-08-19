@@ -157,9 +157,9 @@ def is_loading():
     return is_loading_items
 
 
-class BrowserItem(storage.Data):
+class BrowserNode(storage.Data):
     def __init__(self, obj):
-        super(BrowserItem, self).__init__(obj.get('label','???'), obj)
+        super(BrowserNode, self).__init__(obj.get('label','???'), obj)
         self.kind = 'browser'
         self.uid = obj['uid']
         self.image = obj.get('image','')
@@ -175,16 +175,16 @@ class BrowserItem(storage.Data):
         self.icon = self.image or obj.get('icon', '')
         self.icon_size = 48 if self.image else 24
         self.font_size = 12
-        self.zoomed_icon_size = 256 if self.image else 24
+        self.zoomed_icon_size = 182
         self.node_size = 1
         dict.update(self, vars(self))
 
     @classmethod
     def deserialize(cls, obj):
-        return BrowserItem(obj)
+        return BrowserNode(obj)
 
     def update(self, obj):
-        super(BrowserItem, self).update(obj)
+        super(BrowserNode, self).update(obj)
         if self.selection:
             obj['selection'] = '%s %s' % (obj.get('selection', ''), self.selection)
         obj['title'] = obj.get('title', self.title)
@@ -194,7 +194,13 @@ class BrowserItem(storage.Data):
             obj['words'] = ' '.join(stopwords.remove_stopwords(' '.join(words)))
 
     def is_related_item(self, other):
-        return False
+        return other.kind == 'browser' and self.domain == other.domain
+
+    def __eq__(self, other):
+        return other.kind == 'browser' and self.domain == other.domain and self.title == other.title
+
+    def __hash__(self):
+        return hash("%s-%s" % (self.domain, self.title))
 
     def is_duplicate(self, duplicates):
         if is_meta_site(self.url):
@@ -220,7 +226,7 @@ def poll():
 settings['browser/can_load_more'] = True
 settings['browser/can_delete'] = True
 
-deserialize = BrowserItem.deserialize
+deserialize = BrowserNode.deserialize
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)

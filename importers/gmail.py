@@ -2,7 +2,6 @@ import base64
 from collections import Counter
 from importers import contact
 from importers import file
-from cache import Cache
 import datetime
 import email
 import email.header
@@ -20,6 +19,7 @@ import stopwords
 import storage
 import time
 import traceback
+import urllib
 import utils
 from urllib.parse import urlparse
 from googleapiclient.discovery import build
@@ -67,7 +67,6 @@ service = get_gmail_service()
 class GMail():
     singleton = None
     messages_loaded = 0
-    id_cache = Cache(3600)
 
     def __init__(self):
         self.error = None
@@ -182,6 +181,7 @@ class GMail():
             contact.cleanup()
             storage.Storage.log_search_stats()
             logger.info('Loaded %d messages in total' % cls.messages_loaded)
+            storage.Storage.load_stats()
 
     def parse_message(self, msg):
         msg["payload"]["headers"] = self.parse_headers(msg["payload"])
@@ -260,6 +260,8 @@ class GMail():
     def get_status(cls):
         count = settings['gmail/count']
         days = settings['gmail/days']
+        if settings["gmail/loading"]:
+            return 'Loaded %d messages' % count
         youngest = datetime.datetime.fromtimestamp(settings['gmail/youngest']).date()
         oldest = datetime.datetime.fromtimestamp(settings['gmail/oldest']).date()
         return '%d gmail messages loaded up to %s days between %s and %s' % (count, days, oldest, youngest)
@@ -271,6 +273,7 @@ class GMail():
             days_count = MAXIMUM_DAYS_LOAD
         settings['gmail/lastload'] = time.time()
         settings['gmail/loading'] = True
+        settings['gmail/count'] = 0
 
         timestamp_youngest = settings['gmail/youngest']
         days_count_youngest = 1 + (datetime.datetime.now() - datetime.datetime.fromtimestamp(timestamp_youngest)).days
@@ -280,6 +283,7 @@ class GMail():
         days_count_oldest = (datetime.datetime.now() - datetime.datetime.fromtimestamp(timestamp_oldest)).days - 1
         # cls.load_messages(days_count, days_count_oldest)
 
+        settings['gmail/loading'] = False
         storage.Storage.stats.clear()
 
 
@@ -324,7 +328,6 @@ class GMailNode(storage.Data):
         elif other.kind == 'gmail':
             related = not self.connected and self.label == other.label
             self.connected = other.connected = True
-            self.files = other.files = list(set(self.files + other.files))
         elif self.files and other.kind == 'file':
             related = other.filename in self.files
         elif self.persons and other.kind == 'contact':
@@ -335,13 +338,10 @@ class GMailNode(storage.Data):
         return related
 
     def get_related_items(self):
-        dir = os.path.join(utils.ITEMS_DIR, 'file', utils.cleanup_filename(self.uid))
-        files = [
-            file.load_file(self.uid, filename)
-            for filename in self.files
-        ]
-        logger.debug("add related items for %s" + self.label)
-        return super(GMailNode, self).get_related_items() + files + self.persons
+        files = [file.load_file(self.uid, filename) for filename in self.files]
+        if files:
+            logger.info("  - add related items %s for %s" % (repr(files), self))
+        return files + self.persons
 
     def is_duplicate(self, duplicates):
         if self.fingerprint in duplicates:
@@ -362,10 +362,18 @@ class GMailNode(storage.Data):
             raise
 
 
-def render(args):
+def _render(args):
     url = 'https://mail.google.com/mail/u/0/#search/rfc822msgid:%s' % args["message_id"]
     return '<script>document.location=\'%s\';</script>' % url
 
+
+def render(args):
+    import re
+    words = list(filter(lambda word: re.match("^[a-zA-Z]*$", word), args["subject"].split()))[:10]
+    logger.info(args["subject"])
+    logger.info(words)
+    url = 'https://mail.google.com/mail/u/0/#search/%s' % urllib.parse.quote(' '.join(words))
+    return '<script>document.location=\'%s\';</script>' % url
 
 def delete_all():
     settings['gmail/days'] = 0

@@ -241,8 +241,11 @@ if __name__ == '__main__':
     installer.install()
     port = settings.get('port', PORT_NUMBER)
     threaded_server = ThreadedHTTPServer(('localhost', port), Server)
-    # poller.start()
+    poller.start()
+
+    url = 'http://localhost:%d' % port
     url = 'http://localhost:%d/settings' % port
+
     import webbrowser
     webbrowser.open(url, autoraise=False)
     settings['port'] = port

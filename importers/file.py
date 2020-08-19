@@ -134,6 +134,12 @@ class FileItem(storage.Data):
         self.zoomed_icon_size = 156
         dict.update(self, vars(self))
 
+    def is_related_item(self, other):
+        return False
+
+    def get_related_items(self):
+        return []
+
     def __eq__(self, other):
         return self.kind == other.kind and self.path == other.path
 

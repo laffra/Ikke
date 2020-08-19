@@ -13,6 +13,8 @@ def deserialize(obj):
 
 
 def get_status():
+    if settings["git/loading"]:
+        return 'loaded %d commits from %s' % (settings['git/count'], settings['git/repo'])
     return '%d commits were loaded from %d repositories' % (settings['git/count'], len(settings['git/paths']))
 
 
@@ -21,7 +23,7 @@ def delete_all():
 
 
 def poll():
-    pass
+    load()
 
 
 def can_load_more():
@@ -82,6 +84,9 @@ settings['git/paths'] = [
 deserialize = GitCommit.deserialize
 
 def load_repo(path):
+    settings["git/loading"] = True
+    settings["git/count"] = 0
+    settings["git/repo"] = path
     repository = pydriller.GitRepository(path)
     url = repository.repo.remotes[0].config_reader.get("url")
     for commit in pydriller.RepositoryMining(path).traverse_commits():
@@ -107,7 +112,10 @@ def load_repo(path):
                 for modification in commit.modifications
             ],
         }
-        logger.info("Add %s" % json.dumps(obj, indent=4))
+        logger.debug("Add %s" % json.dumps(obj, indent=4))
         storage.Storage.add_data(obj)
         settings.increment('git/count')
+
+    settings["git/loading"] = False
+    storage.Storage.load_stats()
 

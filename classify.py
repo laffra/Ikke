@@ -101,7 +101,6 @@ def get_most_common_words(query, items):
 def get_edges(query, items, me='', add_words=False, keep_duplicates=False):
     # type(str, list, str, bool) -> (list, list)
     edges, items = add_related_items(items, me)
-    logger.info("Create graph for %d edges and %d items" % (len(edges), len(items)))
     for n,item in enumerate(items, 1):
         logger.debug(" %d:  %s" % (n, item.label))
     if add_words:
@@ -110,8 +109,11 @@ def get_edges(query, items, me='', add_words=False, keep_duplicates=False):
         if item1.is_related_item(item2) or item2.is_related_item(item1):
             item1.edges += 1
             item2.edges += 1
+            logger.debug(" - add edge %s %s %s - %s" % ( item1.is_related_item(item2), item2.is_related_item(item1), item1, item2))
             edges.add((item1, item2))
     items = remove_duplicates(items, keep_duplicates)
+    edges = [edge for edge in edges if edge[0] in items and edge[1] in items]
+    logger.info("Created graph for %d edges and %d items" % (len(edges), len(items)))
     return list(edges), items
    
 

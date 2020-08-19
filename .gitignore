@@ -1,3 +1,5 @@
 __pycache__/*.pyc
 *.pyc
 token.pickle
+.vscode/.ropeproject/config.py
+.vscode/.ropeproject/objectdb

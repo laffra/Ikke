@@ -1,4 +1,3 @@
-import cache
 import datetime
 import elasticsearch
 from importlib import import_module
@@ -30,9 +29,6 @@ item_handlers = { }
 
 class Storage:
     stats = defaultdict(int)
-    search_cache = cache.Cache(60)
-    file_cache = cache.Cache(60)
-    history_cache = cache.Cache(60)
     elastic_client = elasticsearch.Elasticsearch([{'host': 'localhost', 'port': '9200'}])
 
     @classmethod
@@ -157,14 +153,6 @@ class Storage:
             logger.debug('    query: "%s"' % query)
         for k,v in cls.stats.items():
             logger.debug('    %s: %s' % (k, v))
-
-    @classmethod
-    def search_contact(cls, email):
-        # type: (str) -> dict
-        person = cls.search_cache.get(email)
-        if not person:
-            cls.search_cache[email] = person
-        return person
 
     @classmethod
     def search_file(cls, filename):
@@ -330,7 +318,6 @@ class Data(dict):
         self.image = ''
         self.words = []
         self.timestamp = 0
-        self.related_items = []
         self.duplicate = False
         self.edges = 0
 
@@ -344,10 +331,11 @@ class Data(dict):
         return hash(self.uid)
 
     def is_related_item(self, other):
-        return other in self.related_items
+        return False
 
     def get_related_items(self):
-        return self.related_items
+        logger.info("  - add 0 related items for %s" % self)
+        return []
 
     def __eq__(self, other):
         return isinstance(other, self.__class__) and self.uid == other.uid
@@ -358,15 +346,15 @@ class Data(dict):
     def update_words(self, items):
         pass
 
-    def add_related(self, other):
-        self.related_items.append(other)
-
     def is_duplicate(self, duplicates):
         return False
 
     def save(self):
         Storage.stats['writes'] += 1
         Storage.add_data(self)
+
+    def __repr__(self):
+        return "<%s %s %s>" % (self.__class__.__name__.replace("Node", ""), repr(self.uid), repr(self.label))
 
 
 item_handlers.update({
