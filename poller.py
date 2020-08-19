@@ -7,6 +7,8 @@ import threading
 
 from importers import download
 
+logger = logging.getLogger(__name__)
+
 POLL_SLEEP_INTERVAL_SECONDS = 600
 
 class Worker(threading.Thread):
@@ -18,16 +20,18 @@ class Worker(threading.Thread):
 
     def run(self):
         while self.running:
-            self.sleep()
             self.poll()
+            self.sleep()
 
     def sleep(self):
+        logger.info("Sleeping for %d seconds" % POLL_SLEEP_INTERVAL_SECONDS)
         for n in range(POLL_SLEEP_INTERVAL_SECONDS):
             time.sleep(1)
             if not self.running:
                 break
 
     def poll(self):
+        logging.info('Poll running=%s' % self.running)
         if self.running:
             logging.info('Polling importers')
             try:
