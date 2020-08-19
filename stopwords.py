@@ -29,6 +29,9 @@ STOPWORDS = "|".join([
     " nl ",
     " index ",
     " mail ",
+    " invite ",
+    " invitation ",
+    " email ",
     " gmail ",
     " mailto ",
     " html ",
@@ -50,6 +53,16 @@ STOPWORDS = "|".join([
     " fw ",
 
     # OFFICE_WORDS
+    ] +
+    [ "%dpm" % n for n in range(1, 60)] +
+    [
+    " mon(day)+ "
+    " tue(sday)+ "
+    " wed(nesday)+ "
+    " thu(rsday)+ "
+    " fri(day)+ "
+    " sat(urday)+ "
+    " sun(day)+ "
     " wrote ",
     " zoom ",
     " eng ",
@@ -126,18 +139,39 @@ STOPWORDS = "|".join([
     " check ",
 
     # DUTCH_STOPWORDS
+    " januari ",
+    " februari ",
+    " maart ",
+    " april ",
+    " mei ",
+    " juni ",
+    " juli ",
+    " augustus ",
+    " october ",
+    " november ",
+    " december ",
+    " waar ",
     " op ",
     " de ",
     " den ",
     " voor ",
     " mijn ",
     " zijn ",
+    " naar ",
+    " van ",
     " hallo ",
     " goedendag ",
     " goedenmiddag ",
     " goedenmorgen ",
     " goedenavond ",
     " aan ",
+    " weer ",
+    " wel ",
+    " niet ",
+    " staan ",
+    " hebben ",
+    " laten ",
+    " daarna ",
     " af ",
     " al ",
     " als ",
@@ -145,6 +179,7 @@ STOPWORDS = "|".join([
     " dan ",
     " dat ",
     " die ",
+    " deze ",
     " dit ",
     " een ",
     " en ",
@@ -218,7 +253,9 @@ STOPWORDS = "|".join([
     " mar ",
     " apr ",
     " may ",
-    " jun jul aug ",
+    " jun ",
+    " jul ",
+    " aug ",
     " sep ",
     " oct ",
     " nov ",
