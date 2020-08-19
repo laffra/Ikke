@@ -5,12 +5,27 @@ var search_finished = {};
 var RENDER_AS_GRID = localStorage.rendertype == 'grid';
 var TOP_HEIGHT = 250;
 
+var ALPHA_WARMUP_COUNT = 1
 var ALPHA_INITIAL = 0.5
 var ALPHA_WARMUP = 0.05
 var ALPHA_SHAKE = 0.1
-var ALPHA_DRAG = 0.0001
-var ALPHA_DRAG_START = 0.1
-var ALPHA_WARMUP_COUNT = 1
+var ALPHA_DRAG = 0.01
+var ALPHA_DRAG_START = 0.01
+var ALPHA_SHAKE_INITIAL = 0.01
+
+var LINK_DISTANCE = 40
+var LINK_STRENGTH = 2
+var FILE_RADIUS = 30
+var RADIUS_MULTIPLIER = 4
+var LINE_WIDTH_RATIO = 1.3
+
+var COLLIDE_ITERATIONS = 2
+var FORCE_CENTER_X = 0.3
+var FORCE_CENTER_Y = 2.5
+var NODE_FONT_SIZE = 24
+var SPECIAL_NODE_FONT_SIZE = 28
+var IMAGE_SIZE_MINIMUM = 7
+var IMAGE_SIZE_RATIO = 1
 
 var altKeyPressed = false;
 
@@ -240,7 +255,7 @@ function update_summary(kind, graph) {
     var count = graph.nodes.filter(function(node) { return node.kind != 'label'; }).length;
     var stats = graph.stats;
     var action = stats.removed
-        ? '. Dive deeper: <a href=# class="removed-' + kind + '">Show' + stats.removed + ' similar results</a>.'
+        ? '. There is more: <a href=# class="removed-' + kind + '">Show ' + stats.removed + ' similar results</a>.'
         : '. Zoom out: <a href=# class="included-' + kind + '">Remove duplicate results</a>.';
     $('#summary-' + kind).empty().append(
         $('<span>').text('Showing ' + count + ' results for '),
@@ -288,9 +303,9 @@ function update_summary(kind, graph) {
 
 function load_graph(kind, w, h) {
     var force = d3.forceSimulation()
-            .force("link", d3.forceLink().distance(1).strength(1))
-            .force("x", d3.forceX(w/2 - 96).strength(0.3))
-            .force("y", d3.forceY(h/2).strength(2.5))
+            .force("link", d3.forceLink().distance(LINK_DISTANCE).strength(LINK_STRENGTH))
+            .force("x", d3.forceX(w / 2 - 96).strength(FORCE_CENTER_X))
+            .force("y", d3.forceY(h / 2).strength(FORCE_CENTER_Y))
             .force("charge", d3.forceManyBody().strength(1))
             .alpha(ALPHA_INITIAL)
             .alphaDecay(0.05);
@@ -568,7 +583,27 @@ function load_graph(kind, w, h) {
                 }
             })
             shake(ALPHA_WARMUP);
+            setInitialZoomScale()
+            shake(ALPHA_WARMUP);
         }
+
+        function setInitialZoomScale() {
+            var minX = 0,
+              maxX = w,
+              minY = 0,
+              maxY = h;
+            nodes.forEach(function(node) {
+              minX = Math.min(minX, node.x - node.radius);
+              maxX = Math.max(maxX, node.x + node.radius);
+              minY = Math.min(minY, node.y - node.radius);
+              maxY = Math.max(maxY, node.y + node.radius);
+            });
+            currentZoomScale = Math.min(
+              (w - 150) / (maxX - minX),
+              (h - 150) / (maxY - minY)
+            );
+            zoom.scaleTo(svg, currentZoomScale);
+          }
 
         function resize() {
             var width = $(window).width();
