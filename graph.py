@@ -25,8 +25,8 @@ days = {
 MY_EMAIL_ADDRESS = ChromePreferences().get_email()
 LINE_COLORS = [ '#f4c950', '#ee4e5a', '#489ac9', '#41ba7d', '#fb7c54',] * 2
 
-ALL_ITEM_KINDS = [ 'all', 'contact', 'gmail', 'git', 'hangouts', 'browser', 'file', ]
-MY_ITEM_KINDS = [ 'contact', 'gmail', 'git', 'hangouts', 'browser', 'file' ]
+ALL_ITEM_KINDS = [ 'all', 'contact', 'gmail', 'calendar', 'git', 'hangouts', 'browser', 'file', ]
+MY_ITEM_KINDS = [ 'contact', 'gmail', 'calendar', 'git', 'hangouts', 'browser', 'file' ]
 
 MAX_LABEL_LENGTH = 42
 ADD_WORDS_MINIMUM_COUNT = 100

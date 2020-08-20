@@ -1,3 +1,4 @@
+sudo pip3 install --upgrade dateparser
 sudo pip3 install --upgrade psutil
 sudo pip3 install --upgrade google-api-python-client google-auth-httplib2 google-auth-oauthlib
 sudo pip3 install --upgrade pydriller

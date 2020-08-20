@@ -2,6 +2,7 @@ import base64
 from collections import Counter
 from importers import contact
 from importers import file
+from importers import google_apis
 import datetime
 import email
 import email.header
@@ -22,9 +23,6 @@ import traceback
 import urllib
 import utils
 from urllib.parse import urlparse
-from googleapiclient.discovery import build
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
 
 
 MAXIMUM_DAYS_LOAD = 3650
@@ -33,7 +31,6 @@ URL_MATCH_RE = re.compile(r'https?://[\w\d:#@%/;$()~_?\+-=\.&]*')
 DATESTRING_RE = re.compile(' [-+].*')
 CLEANUP_FILENAME_RE = re.compile('[<>@]')
 MY_EMAIL_ADDRESS = ChromePreferences().get_email()
-SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
 
 keys = (
     'uid', 'message_id', 'senders', 'ccs', 'receivers', 'thread',
@@ -45,23 +42,7 @@ path_keys = (
 )
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-def get_gmail_service():
-    creds = None
-    if os.path.exists('token.pickle'):
-        with open('token.pickle', 'rb') as token:
-            creds = pickle.load(token)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file('importers/gmail_credentials.json', SCOPES)
-            creds = flow.run_local_server(port=0)
-        with open('token.pickle', 'wb') as token:
-            pickle.dump(creds, token)
-    return build('gmail', 'v1', credentials=creds)
-
-service = get_gmail_service()
+service = google_apis.get_google_service("gmail", "v1")
 
 
 class GMail():
@@ -281,7 +262,7 @@ class GMail():
 
         timestamp_oldest = settings['gmail/oldest']
         days_count_oldest = (datetime.datetime.now() - datetime.datetime.fromtimestamp(timestamp_oldest)).days - 1
-        # cls.load_messages(days_count, days_count_oldest)
+        cls.load_messages(days_count, days_count_oldest)
 
         settings['gmail/loading'] = False
         storage.Storage.stats.clear()
@@ -292,7 +273,7 @@ class GMailNode(storage.Data):
         super(GMailNode, self).__init__(obj.get('label', ''))
         self.uid = obj['uid']
         self.message_id = obj.get('message_id', '')
-        self.color = 'black'
+        self.color = 'darkred'
         self.names = obj.get('names', [])
         self.emails = obj.get('emails', [])
         self.persons = list(filter(None, [contact.find_contact(email) for email in self.emails]))
@@ -309,7 +290,7 @@ class GMailNode(storage.Data):
         self.thread = obj.get('thread')
         self.node_size = 1
         self.url_domains = obj.get('url_domains', [])
-        self.files = obj.get('files', [])
+        self.files = list(filter(lambda file: not file.endswith(".ics"), obj.get('files', [])))
         self.fingerprint = '%s-%s' % (
             self.label,
             '-'.join(person['uid'] for person in self.persons if not person['email'] == MY_EMAIL_ADDRESS)
@@ -339,8 +320,6 @@ class GMailNode(storage.Data):
 
     def get_related_items(self):
         files = [file.load_file(self.uid, filename) for filename in self.files]
-        if files:
-            logger.info("  - add related items %s for %s" % (repr(files), self))
         return files + self.persons
 
     def is_duplicate(self, duplicates):
@@ -350,16 +329,6 @@ class GMailNode(storage.Data):
         logger.debug('Duplicate: %s' % self.fingerprint)
         duplicates.add(self.fingerprint)
         return False
-
-    @classmethod
-    def deserialize(cls, obj):
-        try:
-            return GMailNode(obj)
-        except Exception as e:
-            logger.error('Cannot deserialize:' + e)
-            for k,v in obj.items():
-                logger.error('%s: %s' % (k, v))
-            raise
 
 
 def _render(args):
@@ -393,7 +362,9 @@ settings['gmail/pending'] = 'gmail/username' not in settings
 
 get_status = GMail.get_status
 
-deserialize = GMailNode.deserialize
+
+def deserialize(obj):
+    return GMailNode(obj)
 
 
 def cleanup():

@@ -34,6 +34,7 @@ class HangoutNode(gmail.GMailNode):
     def __init__(self, obj):
         super(HangoutNode, self).__init__(obj)
         self.kind = 'hangouts'
+        self.color = 'green'
         self.icon = 'get?path=icons/hangouts-icon.png'
         dict.update(self, vars(self))
 

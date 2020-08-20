@@ -162,7 +162,10 @@ class Server(BaseHTTPRequestHandler):
         self.respond(self.load_resource(path, 'rb'))
 
     def get_image(self):
-        path = os.path.join(utils.FILE_DIR, self.args['path'])
+        filename = self.args['path']
+        if not "/" in filename:
+            filename = os.path.join(filename, self.args.get("filename", "No filename in %s" % json.dumps(self.args)))
+        path = os.path.join(utils.FILE_DIR, filename)
         self.respond(self.load_resource(path, 'rb'))
 
     def render(self):
@@ -228,6 +231,7 @@ class Server(BaseHTTPRequestHandler):
         basename = os.path.basename(filename)
         filename = os.path.join(dirname, basename)
         path = os.path.join(utils.INSTALL_FOLDER, os.path.join('html', filename))
+        logger.info("load %s" % path)
         with open(path, format) as fp:
             return fp.read()
 
@@ -236,15 +240,20 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     """Handle requests in a separate thread."""
 
 
-if __name__ == '__main__':
+def test():
+    from importers import calendar
+    calendar.Calendar.load(8, 7)
+
+def run():
     logging.basicConfig(level=logging.INFO)
     installer.install()
     port = settings.get('port', PORT_NUMBER)
     threaded_server = ThreadedHTTPServer(('localhost', port), Server)
-    poller.start()
 
-    url = 'http://localhost:%d' % port
+    # poller.start()
+
     url = 'http://localhost:%d/settings' % port
+    url = 'http://localhost:%d' % port
 
     import webbrowser
     webbrowser.open(url, autoraise=False)
@@ -257,3 +266,6 @@ if __name__ == '__main__':
         poller.stop()
         for kind in graph.ALL_ITEM_KINDS[1:]:
             Storage.stop_loading(kind)
+
+if __name__ == '__main__':
+    run()

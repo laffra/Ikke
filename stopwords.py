@@ -38,6 +38,7 @@ STOPWORDS = "|".join([
     " doc ",
     " uid ",
     " rfc ",
+    " null ",
 
     # SIZE_WORDS
     " small ",

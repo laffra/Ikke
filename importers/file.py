@@ -124,11 +124,11 @@ class FileItem(storage.Data):
         self.filename = obj['filename']
         self.uid = obj['uid']
         if not "/" in self.uid:
-            self.uid = "%s/%s" % (self.uid, self.filename),
+            self.uid = "%s/%s" % (self.uid, self.filename)
         self.label = obj['label']
         self.timestamp = obj['timestamp']
         self.words = obj['words']
-        self.path = os.path.join(obj["uid"], obj["filename"])
+        self.path = self.uid
         self.icon = get_icon(self.path)
         self.icon_size = 44
         self.zoomed_icon_size = 156

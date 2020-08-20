@@ -16,8 +16,8 @@ import utils
 import time
 from collections import defaultdict
 
-ITEM_KINDS = [ 'contact', 'gmail', 'hangouts', 'git', 'browser', 'file' ]
-SEARCH_KINDS = [ 'contact', 'gmail', 'hangouts', 'git', 'browser' ]
+ITEM_KINDS = [ 'contact', 'gmail', 'hangouts', 'calendar', 'git', 'browser', 'file' ]
+SEARCH_KINDS = [ 'contact', 'gmail', 'hangouts', 'calendar', 'git', 'browser' ]
 INDEX = "insights"
 MAX_NUMBER_OF_ITEMS = 1000
 
@@ -56,6 +56,8 @@ class Storage:
         hits = cls.search_indexes(query, since)
         results = list(filter(None, [cls.resolve(hit) for hit in hits if cls.relevant(hit)]))
         logger.info("Found %d results for '%s' since %s" % (len(results), query, datetime.datetime.fromtimestamp(since)))
+        for result in results:
+            logger.info("   %s" % json.dumps(result['kind'], indent=4))
         cls.record_search_stats(query, time.time() - search_start, len(results))
         return results
 
@@ -84,6 +86,7 @@ class Storage:
                 }
             }
         )["hits"]["hits"]
+        logger.info(json.dumps(hits, indent=4))
         sources = list(filter(None, [hit["_source"] for hit in hits]))
         return sources
 
@@ -334,7 +337,6 @@ class Data(dict):
         return False
 
     def get_related_items(self):
-        logger.info("  - add 0 related items for %s" % self)
         return []
 
     def __eq__(self, other):
