@@ -31,6 +31,7 @@ URL_MATCH_RE = re.compile(r'https?://[\w\d:#@%/;$()~_?\+-=\.&]*')
 DATESTRING_RE = re.compile(' [-+].*')
 CLEANUP_FILENAME_RE = re.compile('[<>@]')
 MY_EMAIL_ADDRESS = ChromePreferences().get_email()
+GMAIL_RETRY_DELAY = 30
 
 keys = (
     'uid', 'message_id', 'senders', 'ccs', 'receivers', 'thread',
@@ -42,7 +43,7 @@ path_keys = (
 )
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-service = google_apis.get_google_service("gmail", "v1")
+gmail_service = google_apis.get_google_service("gmail", "v1")
 
 
 class GMail():
@@ -78,7 +79,7 @@ class GMail():
             if not filename:
                 continue
             attachmentId = part["body"]["attachmentId"]
-            attachment = service.users().messages().attachments().get(
+            attachment = gmail_service.users().messages().attachments().get(
                 userId = "me",
                 id = attachmentId,
                 messageId = msg["id"]
@@ -142,11 +143,18 @@ class GMail():
                     before = datetime.date.today() + datetime.timedelta(1) - datetime.timedelta(day)
                     after = before - datetime.timedelta(2)
                     query = "before: {0} after: {1}".format(before.strftime('%Y/%m/%d'), after.strftime('%Y/%m/%d'))
-                    result = service.users().messages().list(userId="me", maxResults=1000, q=query).execute()
-                    logger.info("Load {0} => {1}".format(query, len(result["messages"])))
-                    for message in result["messages"]:
-                        response = service.users().messages().get(userId="me", id=message["id"], format='full').execute()
-                        reader.parse_message(response)
+                    try:
+                        result = gmail_service.users().messages().list(userId="me", maxResults=1000, q=query).execute()
+                        logger.info("Load {0} => {1}".format(query, len(result["messages"])))
+                        requests = [
+                            gmail_service.users().messages().get(userId = 'me', id = msg_id['id'])
+                            for msg_id in result["messages"]
+                        ]
+                        google_apis.batch(gmail_service, requests, reader.parse_message)
+                    except urllib.error.URLError:
+                        logger.info("Gmail service timed out. Trying again in %s seconds" % GMAIL_RETRY_DELAY)
+                        time.sleep(GMAIL_RETRY_DELAY)
+                        continue
                     contact.cleanup()
                     logger.debug('Processed %d inbox and %d sent messages for day %d' % (0, 0, day))
                     logger.info(cls.get_status())
@@ -164,7 +172,9 @@ class GMail():
             logger.info('Loaded %d messages in total' % cls.messages_loaded)
             storage.Storage.load_stats()
 
-    def parse_message(self, msg):
+    def parse_message(self, request_id, msg, exception):
+        if not settings["gmail/loading"]:
+            return
         msg["payload"]["headers"] = self.parse_headers(msg["payload"])
         msg["uid"] = msg["id"]
         payload = msg['payload']
@@ -279,7 +289,7 @@ class GMailNode(storage.Data):
         self.persons = list(filter(None, [contact.find_contact(email) for email in self.emails]))
         self.in_reply_to = obj.get('in_reply_to', '')
         self.subject = obj.get('subject', '')
-        self.words = obj.get('words', [])
+        self.words = list(sorted(obj.get('words', []))) or self.subject.split()
         self.rest = obj.get('rest', '')
         self.kind = obj.get('kind')
         self.timestamp = obj.get('timestamp')
@@ -291,11 +301,7 @@ class GMailNode(storage.Data):
         self.node_size = 1
         self.url_domains = obj.get('url_domains', [])
         self.files = list(filter(lambda file: not file.endswith(".ics"), obj.get('files', [])))
-        self.fingerprint = '%s-%s' % (
-            self.label,
-            '-'.join(person['uid'] for person in self.persons if not person['email'] == MY_EMAIL_ADDRESS)
-        )
-        self.fingerprint = self.label
+        self.label = self.label or ' '.join(self.words + [str(len(self.files))]) 
         self.connected = False
         dict.update(self, vars(self))
 
@@ -305,7 +311,6 @@ class GMailNode(storage.Data):
     def is_related_item(self, other):
         if self.url_domains and other.kind == 'browser':
             related = other.domain == self.url_domains[0]
-            self.keep = True
         elif other.kind == 'gmail':
             related = not self.connected and self.label == other.label
             self.connected = other.connected = True
@@ -323,11 +328,11 @@ class GMailNode(storage.Data):
         return files + self.persons
 
     def is_duplicate(self, duplicates):
-        if self.fingerprint in duplicates:
+        key = "gmail - %s" % ' '.join(self.words[:3])
+        if key in duplicates:
             self.duplicate = True
             return True
-        logger.debug('Duplicate: %s' % self.fingerprint)
-        duplicates.add(self.fingerprint)
+        duplicates.add(key)
         return False
 
 

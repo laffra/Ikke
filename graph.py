@@ -1,3 +1,4 @@
+import datetime
 from collections import defaultdict
 import logging
 from urllib.parse import unquote
@@ -66,9 +67,9 @@ class Graph:
 
     def get_graph(self, kind, keep_duplicates):
         self.my_pool.wait_completion()
-        found_items = self.search_results['all' if kind in ['contact', 'file'] else kind]
+        found_items = list(self.search_results['all' if kind in ['contact', 'file'] else kind])
         add_words = True
-        edges, items = classify.get_edges(self.query, found_items, MY_EMAIL_ADDRESS, add_words, keep_duplicates)
+        edges, items = classify.get_edges(self.query, found_items, add_words, keep_duplicates)
         removed_item_count = 0
         for item in found_items:
             if not item in items:
@@ -78,7 +79,7 @@ class Graph:
         if REDUCE_GRAPH_SIZE:
             items = self.remove_lonely_images(items)
             items = self.remove_lonely_labels(items)
-            items = self.remove_labels(items)
+            # items = self.remove_labels(items)
 
         for item in items:
             if len(item.label) > MAX_LABEL_LENGTH:
@@ -86,6 +87,7 @@ class Graph:
                 head = item.label[:cutoff]
                 tail = item.label[-cutoff:] 
                 item.label = "%s...%s" % (head, tail)
+            item.date = str(datetime.datetime.fromtimestamp(float(item.timestamp))) if item.timestamp else ""
 
         nodes_index = dict((item.uid, n) for n, item in enumerate(items))
         label_index = dict((item.label, n) for n, item in enumerate(items))

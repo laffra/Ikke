@@ -8,20 +8,19 @@ var TOP_HEIGHT = 250;
 var ALPHA_WARMUP_COUNT = 1
 var ALPHA_INITIAL = 0.5
 var ALPHA_WARMUP = 0.05
-var ALPHA_SHAKE = 0.1
+var ALPHA_SHAKE = 0.2
 var ALPHA_DRAG = 0.01
 var ALPHA_DRAG_START = 0.01
-var ALPHA_SHAKE_INITIAL = 0.01
+var ALPHA_SHAKE_INITIAL = 0.3
 
-var LINK_DISTANCE = 40
-var LINK_STRENGTH = 2
-var FILE_RADIUS = 30
-var RADIUS_MULTIPLIER = 4
+var LINK_DISTANCE = 20
+var LINK_STRENGTH = 5
+var NODE_RADIUS = 60
 var LINE_WIDTH_RATIO = 1.3
 
 var COLLIDE_ITERATIONS = 2
-var FORCE_CENTER_X = 0.3
-var FORCE_CENTER_Y = 2.5
+var FORCE_CENTER_X = 0.6
+var FORCE_CENTER_Y = 1.9
 var NODE_FONT_SIZE = 24
 var SPECIAL_NODE_FONT_SIZE = 28
 var IMAGE_SIZE_MINIMUM = 7
@@ -36,6 +35,7 @@ $(document).keyup(function(){
     altKeyPressed = false;
 });
 
+var email = $("#email").text();
 
 function init_tabs() {
     $('#tabs')
@@ -143,7 +143,7 @@ function render() {
         }
     };
 
-    $.get("search?" + get_args(query, ''), function() {
+    $.get("search?email=" + email + "&" + get_args(query, ''), function() {
         d3.range(kinds.length).forEach(function(index) {
             if (index == localStorage.tab) {
                 render_tab(index);
@@ -185,13 +185,13 @@ function load_grid(kind, w, h) {
             $('#tabs-' + kind + ' .ui-table').remove()
             var table = $('<table class="ui-table">').appendTo($('#tabs-' + kind + ' .tab-contents'));
             table.append($('<tr>').append([
-                $('<th colspan=2>').text('Title'),
-                $('<th>').text('Date'),
-                $('<th>').text('Who'),
+                $('<th colspan=2 width=630>').text('Title'),
+                $('<th width=70>').text('Date'),
+                $('<th width=400>').text('Who'),
             ]));
         }
         var sorted_nodes = graph.nodes.sort(function compare(a, b) {
-        return a.kind < b.kind ? 1 : -1;
+        return a.timestamp < b.timestamp ? 1 : -1;
     });
     function get_icon(node) {
         return node.kind == 'contact' ? 'get?path=icons/person-icon.png' : node.icon;
@@ -201,7 +201,7 @@ function load_grid(kind, w, h) {
             table.append($('<tr>')
                 .on("click", function() {
                     var row = $(this);
-                    launch(row);
+                    launch(node);
                 })
                 .attr('kind', node.kind)
                 .attr('label', node.label)
@@ -211,9 +211,9 @@ function load_grid(kind, w, h) {
                     $('<td width=10>').append(
                         $('<img class="grid-icon">').attr('src', get_icon(node)).css('width', '16px')
                     ),
-                    $('<td>').html(node.url || node.subject || (node.kind == 'contact' ? '<i>Contact:</i> ' : ' ') + node.label),
+                    $('<td width=600>').html(node.url || node.subject || (node.kind == 'contact' ? '<i>Contact:</i> ' : ' ') + node.label),
                     $('<td>').html(nobreaks((node.date || '').split(' ')[0])),
-                    $('<td>').html(nobreaks(node.persons.map(x => x.label).join(', ')))
+                    $('<td width=400>').html(nobreaks(node.persons.map(x => x.label).join(', ')))
                     ]));
             } else {
               console.log('skip grid: ' + node.kind + ' ' + node.label)
@@ -301,14 +301,22 @@ function update_summary(kind, graph) {
     size_selects();
 }
 
+function linkDistance(node) {
+    return LINK_DISTANCE;
+}
+
+function linkStrength(node) {
+    return LINK_STRENGTH;
+}
+
 function load_graph(kind, w, h) {
     var force = d3.forceSimulation()
-            .force("link", d3.forceLink().distance(LINK_DISTANCE).strength(LINK_STRENGTH))
+            .force("link", d3.forceLink().distance(linkDistance).strength(linkStrength))
             .force("x", d3.forceX(w / 2 - 96).strength(FORCE_CENTER_X))
             .force("y", d3.forceY(h / 2).strength(FORCE_CENTER_Y))
-            .force("charge", d3.forceManyBody().strength(1))
+            .force("charge", d3.forceManyBody().strength(3))
             .alpha(ALPHA_INITIAL)
-            .alphaDecay(0.05);
+            .alphaDecay(0.1);
 
     var w = $(window).width();
     var h = $(window).height() - TOP_HEIGHT;
@@ -440,8 +448,8 @@ function load_graph(kind, w, h) {
 
         function setCollideRadius() {
             force.force("collide", d3.forceCollide()
-                    .radius(function(d) { return 30 +  60 * Math.random(); })
-                    .iterations(32))
+                    .radius(NODE_RADIUS)
+                    .iterations(18))
         }
 
         function shake(alpha) {
@@ -576,15 +584,8 @@ function load_graph(kind, w, h) {
         });
 
         function warmup() {
-            d3.range(ALPHA_WARMUP_COUNT).forEach(function() {
-                force.alpha(ALPHA_INITIAL);
-                while (force.alpha() > ALPHA_WARMUP) {
-                    force.tick();
-                }
-            })
-            shake(ALPHA_WARMUP);
-            setInitialZoomScale()
-            shake(ALPHA_WARMUP);
+            shake(ALPHA_SHAKE);
+            setInitialZoomScale();
         }
 
         function setInitialZoomScale() {
@@ -620,16 +621,21 @@ function load_graph(kind, w, h) {
 }
 
 function launch(obj) {
-    if (obj.kind == "file") {
-        open_file(obj);
-    } else {
-        render_in_window(obj);
+    switch (obj.kind) {
+        case "file":
+            open_file(obj);
+            break;
+        case "label":
+            document.location = "/?q=" + obj.label;
+            break;
+        default:
+            render_in_window(obj);
     } 
 }
 
 function open_file(obj) {
     console.log("Open", obj);
-    $.get("open?path=" + obj["path"], function() {
+    $.get("open?email=" + email + "&path=" + obj["path"], function() {
         console.log("Opened", obj);
     });
 }

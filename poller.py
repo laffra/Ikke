@@ -20,8 +20,8 @@ class Worker(threading.Thread):
 
     def run(self):
         while self.running:
-            self.poll()
             self.sleep()
+            self.poll()
 
     def sleep(self):
         logger.info("Sleeping for %d seconds" % POLL_SLEEP_INTERVAL_SECONDS)

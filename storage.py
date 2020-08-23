@@ -33,7 +33,7 @@ class Storage:
 
     @classmethod
     def add_data(cls, data):
-        cls.elastic_client.index(index=data["kind"], id=data["uid"], body=data)
+        cls.elastic_client.index(index=data["kind"], id=data["uid"], body=data, request_timeout=30)
 
     @classmethod
     def get_local_path(cls, file):
@@ -54,12 +54,34 @@ class Storage:
         search_start = time.time()
         since = (datetime.datetime.now() - datetime.timedelta(days=days)).timestamp()
         hits = cls.search_indexes(query, since)
-        results = list(filter(None, [cls.resolve(hit) for hit in hits if cls.relevant(hit)]))
-        logger.info("Found %d results for '%s' since %s" % (len(results), query, datetime.datetime.fromtimestamp(since)))
-        for result in results:
-            logger.info("   %s" % json.dumps(result['kind'], indent=4))
-        cls.record_search_stats(query, time.time() - search_start, len(results))
-        return results
+        items = list(filter(None, [cls.resolve(hit) for hit in hits if cls.relevant(hit)]))
+        cls.truncate_words(items, 5)
+        items = cls.remove_negatives(query, items)
+        items = items + cls.get_related_items(items)
+        items = cls.remove_negatives(query, items)
+        logger.info("Found %d items for '%s' since %s" % (len(items), query, datetime.datetime.fromtimestamp(since)))
+        cls.record_search_stats(query, time.time() - search_start, len(items))
+        return items
+
+    @classmethod
+    def truncate_words(cls, items, max_count):
+        for item in items:
+            item.words = item.words[:max_count]
+
+
+    @classmethod
+    def get_related_items(cls, items):
+        return [
+            related_item
+            for item in items
+            for related_item in item.get_related_items()
+            if related_item 
+        ]
+
+    @classmethod
+    def remove_negatives(cls, query, items):
+        negatives = [word[1:] for word in query.split() if word.startswith("-")]
+        return [item for item in items if not cls.match_negative(negatives, item)]
 
     @classmethod
     def search_indexes(cls, query, since):
@@ -72,6 +94,7 @@ class Storage:
                             "query_string": {
                                 "query": cls.wildcard(query),
                                 "fuzziness": "2",
+                                "default_operator": "OR" if " OR " in query else "AND",
                                 "default_field": "*"
                             }
                         },
@@ -86,9 +109,8 @@ class Storage:
                 }
             }
         )["hits"]["hits"]
-        logger.info(json.dumps(hits, indent=4))
-        sources = list(filter(None, [hit["_source"] for hit in hits]))
-        return sources
+        logger.info("Found %d hits" % len(hits))
+        return list(filter(None, [hit["_source"] for hit in hits]))
 
     @classmethod
     def load_stats(cls):
@@ -132,7 +154,20 @@ class Storage:
     
     @classmethod
     def wildcard(cls, query):
-        return " ".join("*%s*^5" % word for word in query.split())
+        return " ".join(
+            "*%s*^5" % word if not word.startswith('"') else word[1:-1]
+            for word in query.split()
+            if not word in ["AND, ""OR"] and not word.startswith("-")) 
+
+    @classmethod
+    def match_negative(cls, negatives, item):
+        words = item.get("words", [])
+        if not words:
+            return False
+        for negative in negatives:
+            if negative in words:
+                return True
+        return False
 
     @classmethod
     def resolve(cls, obj):

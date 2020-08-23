@@ -142,6 +142,15 @@ label span {
     overflow: auto;
 }
 
+.ui-table th {
+    display: inline-block;
+}
+
+.ui-table td {
+    display: inline-block;
+    text-overflow: ellipsis;
+}
+
 td {
     overflow: hidden;
 }

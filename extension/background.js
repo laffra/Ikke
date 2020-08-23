@@ -37,5 +37,3 @@ chrome.runtime.onMessage.addListener(
         return true;
     }
 );
-
-console.log('Ikke: background.js loaded.')

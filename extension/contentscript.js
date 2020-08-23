@@ -61,10 +61,7 @@ function highlightSearch() {
 }
 
 function getFavIcon() {
-    if ($("#favicon")) {
-        return $("#favicon").attr("href");
-    }
-    return '';
+    return $('link[rel="shortcut icon"]').prop('href');
 }
 
 function findKeywords() {
@@ -92,5 +89,3 @@ if (window.self == window.top) {
     scheduleImageLoader();
     highlightSearch();
 }
-
-console.log('Ikke: extension loaded.')

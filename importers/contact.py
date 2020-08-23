@@ -48,7 +48,7 @@ def find_contact(email, name='', phones=None, timestamp=None):
             'timestamp': timestamp or time.time(),
             'phones': phones or [],
         })
-        logging.debug('CONTACT: new contact ==> %s %s' % (email, contact.names))
+        logging.info('CONTACT: new contact ==> %s %s' % (email, contact.names))
         save_queue.add(contact)
     if name and not name in contact.names:
         contact.names.append(name)

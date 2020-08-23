@@ -37,8 +37,8 @@
                             <div class="search-button">&#9906;</div>
                         </div>
                         <div class="profile">
-                            <img src="{{profile['picture_url']}}">
-                            <div>{{profile['full_name']}}</div>
+                            <img src="{{account['picture_url']}}">
+                            <div>{{account['full_name']}}</div>
                         </div>
                     </div>
                     <div id="tabs">
@@ -79,8 +79,9 @@
                 </td>
             </tr>
         </table>
+        <div id="email">{{account['email']}}</div>";
         <script>
-        var kinds = {{ kinds|safe }};
+        window.kinds = {{ kinds|safe }};
         </script>
         <script src="main.js"></script>
     </body>

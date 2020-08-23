@@ -4,9 +4,9 @@ import os
 
 def get_preferences_path():
     if os.name == 'nt':
-        return ['AppData', 'Local', 'Google', 'Chrome', 'User Data', 'Default', 'preferences']
+        return ['AppData', 'Local', 'Google', 'Chrome', 'User Data', 'Profile 1', 'preferences']
     else:
-        return ['Library', 'Application Support', 'Google', 'Chrome', 'Default', 'Preferences']
+        return ['Library', 'Application Support', 'Google', 'Chrome', 'Profile 1', 'Preferences']
 
 
 class ChromePreferences:

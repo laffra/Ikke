@@ -108,8 +108,9 @@ class Server(BaseHTTPRequestHandler):
             'query': self.args.get('q', ''),
             'kinds': graph.ALL_ITEM_KINDS,
             'kinds_string': repr(graph.ALL_ITEM_KINDS),
-            'profile': self.preferences.get_account_info(),
+            'account': self.preferences.get_account_info(),
         })
+        logger.info(self.preferences.get_account_info())
         self.respond(html)
 
     def clear(self):
@@ -127,9 +128,10 @@ class Server(BaseHTTPRequestHandler):
 
     def search(self):
         query = self.args.get('q', '')
+        email = self.args['email']
         settings['query'] = query
         duration = self.args.get('duration', 'year')
-        logger.info('search %s %s' % (duration, query))
+        logger.info('search %s %s %s' % (email, duration, query))
         self.graphs[query] = graph.Graph(query, duration)
         self.respond('OK')
 
@@ -170,6 +172,7 @@ class Server(BaseHTTPRequestHandler):
 
     def render(self):
         try:
+            logger.info("render %s" % json.dumps(self.args, indent=4))
             handler = Storage.get_handler(self.args["kind"])
             self.respond('<html>%s<p>Args:<pre>%s</pre>' % (
                 handler.render(self.args),

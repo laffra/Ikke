@@ -82,7 +82,6 @@ def save_image(url, title, image, favicon, selection, timestamp=0, force=False):
     title = ' '.join(stopwords.remove_stopwords(title))
     selection = ' '.join(stopwords.remove_stopwords(selection))
     uid = '#'.join([domain, str(timestamp), title])
-    logger.debug('Track %s %s' % (url, selection))
     settings.increment('browser/added')
     settings.increment('browser/count')
     Storage.add_data({
@@ -92,11 +91,12 @@ def save_image(url, title, image, favicon, selection, timestamp=0, force=False):
         'domain': domain,
         'label': domain,
         'image': image,
-        'icon': image or favicon,
+        'icon': favicon,
         'selection': selection,
         'title': title,
         'timestamp': timestamp or utils.get_timestamp()
     })
+
 
 
 def load_history():
@@ -166,14 +166,12 @@ class BrowserNode(storage.Data):
         self.url = obj.get('url', '')
         self.domain, self.timestamp, self.title = obj['uid'].split('#')
         self.label = self.domain
-
         self.selection = obj.get('selection', '')
         words = (self.selection + ' ' + self.title).split(' ')
         self.words = list(set(word.lower() for word in words))
-
         self.color = 'navy'
-        self.icon = self.image or obj.get('icon', '')
-        self.icon_size = 48 if self.image else 24
+        self.icon = obj['icon'] if ".google.com" in self.url else self.image or obj["icon"]
+        self.icon_size = 24 if ".google.com" in self.url else 48 if self.image else 24
         self.font_size = 12
         self.zoomed_icon_size = 182
         self.node_size = 1

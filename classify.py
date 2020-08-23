@@ -53,27 +53,23 @@ def adjacent(items):
         yield (items[index], items[index + 1])
 
 
-def add_related_items(items, me):
+def get_item_edges(items):
     # type(list, str) -> list
-    related_items = [
-        related_item
+    return {
+        (item, related)
         for item in items
-        for related_item in item.get_related_items()
-        if related_item and not related_item.email == me
-    ]
-    edges = {
-        (item1, item2)
-        for item in items
-        for item1, item2 in itertools.combinations([item] + item.get_related_items(), 2)
+        for related in item.get_related_items()
     }
-    return edges, list(items) + related_items
 
 
 def remove_duplicates(items, keep_duplicates):
     # type(list, bool) -> list
     duplicates = set()
-    items = sorted(items, key=lambda item: not hasattr(item, 'keep'))
-    results = [item for item in items if keep_duplicates or hasattr(item, 'keep') or not item.is_duplicate(duplicates)]
+    logger.debug("################## %d emails" % len(list(filter(lambda n: n["kind"] == "gmail", items))))
+    for item in items:
+        if item.kind == "gmail":
+            logger.debug('%s - %s' % (item.uid, item.subject))
+    results = [item for item in items if keep_duplicates or not item.is_duplicate(duplicates)]
     logger.debug('Found %d duplicates, duplicates=%s', len(items) - len(results), duplicates)
     if len(results) > storage.MAX_NUMBER_OF_ITEMS:
         too_much = TooMuch(len(results) - storage.MAX_NUMBER_OF_ITEMS)
@@ -98,13 +94,12 @@ def get_most_common_words(query, items):
     return most_common
 
 
-def get_edges(query, items, me='', add_words=False, keep_duplicates=False):
+
+def get_edges(query, items, add_words=False, keep_duplicates=False):
     # type(str, list, str, bool) -> (list, list)
-    edges, items = add_related_items(items, me)
-    for n,item in enumerate(items, 1):
-        logger.debug(" %d:  %s" % (n, item.label))
+    edges = get_item_edges(items)
     if add_words:
-        items.extend(Label(word) for word in get_most_common_words(query, items) if not stopwords.is_stopword(word))
+        items += [Label(word) for word in get_most_common_words(query, items) if not stopwords.is_stopword(word)]
     for item1, item2 in itertools.combinations(items, 2):
         if item1.is_related_item(item2) or item2.is_related_item(item1):
             item1.edges += 1
@@ -113,7 +108,7 @@ def get_edges(query, items, me='', add_words=False, keep_duplicates=False):
             edges.add((item1, item2))
     items = remove_duplicates(items, keep_duplicates)
     edges = [edge for edge in edges if edge[0] in items and edge[1] in items]
-    logger.info("Created graph for %d edges and %d items" % (len(edges), len(items)))
+    logger.info("Created graph for %d edges and %d items, with %d emails" % (len(edges), len(items), len(list(filter(lambda item: item.kind == "gmail", items)))))
     return list(edges), items
    
 
@@ -152,7 +147,7 @@ if __name__ == '__main__':
     query = 'blockchain'
     items = storage.Storage.search(query, 3)
     logging.debug('Found %d items.' % len(items))
-    edges, all_items = get_edges(items, 'laffra@gmail.com')
+    edges, all_items = get_edges(items)
     logging.debug('Edges:')
     for item1, item2 in edges:
         logging.debug('   %s - %s' % (repr(item1.label), repr(item2.label)))

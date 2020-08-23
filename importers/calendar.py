@@ -37,7 +37,7 @@ class Calendar():
             logger.info('Loading calendar events for the 1ast %s days - %s days back' % (count, start))
 
             day = start
-            reader = Calendar()
+            settings['calendar/count'] = 0
             while settings['calendar/loading'] and day < count:
                 try:
                     before = datetime.datetime.utcnow() + datetime.timedelta(days=1) - datetime.timedelta(days=day)
@@ -67,7 +67,10 @@ class Calendar():
     @classmethod
     def parse_events(cls, events):
         for event in events:
-            when = dateparser.parse(event["start"]["dateTime"])
+            start = event.get("start")
+            if not start or not "dateTime" in start:
+                continue
+            when = dateparser.parse(start["dateTime"])
             timestamp = when.timestamp()
             storage.Storage.add_data({
                 "kind": "calendar",
@@ -77,21 +80,22 @@ class Calendar():
                 "words": stopwords.remove_stopwords("%s %s" % (event.get("summary", ""), event.get("description", ""))),
                 "names": cls.get_names(event),
                 "url": event["htmlLink"],
-                "start": event["start"]["dateTime"],
+                "start": start["dateTime"],
                 "end": event["end"]["dateTime"],
                 "timestamp": timestamp,
                 "hangout": event.get("hangoutLink", "")
             })
+            settings['calendar/count'] += 1
 
     @classmethod
     def get_status(cls):
         count = settings['calendar/count']
         days = settings['calendar/days']
         if settings["calendar/loading"]:
-            return 'Loaded %d messages' % count
+            return 'Loaded %d events' % count
         youngest = datetime.datetime.fromtimestamp(settings['calendar/youngest']).date()
         oldest = datetime.datetime.fromtimestamp(settings['calendar/oldest']).date()
-        return '%d calendar messages loaded up to %s days between %s and %s' % (count, days, oldest, youngest)
+        return '%d calendar events loaded up to %s days between %s and %s' % (count, days, oldest, youngest)
 
     @classmethod
     def load(cls, days_count=1, days_start=0):
