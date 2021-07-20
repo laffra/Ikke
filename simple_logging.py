@@ -22,7 +22,7 @@ def log_impl(msg):
 def log(level, *msg):
     # type(int, str) -> None
     if level <= LOG_LEVEL:
-        when = datetime.datetime.now().strftime('%H:%M:%S')
+        when = datetime.datetime.utcnow().strftime('%H:%M:%S')
         log_impl('%s %s %s: %s' % (caller_info(), when, KINDS[level], ' '.join(map(str,msg))))
 
 

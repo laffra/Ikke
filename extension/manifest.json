@@ -18,8 +18,8 @@
       },
       "default_title": "Ikke"
    },
-   "permissions": [ "tabs", "http://*/", "https://*/" ],
+   "permissions": [ "tabs", "http://*/", "https://*/", "identity", "identity.email" ],
    "short_name": "Ikke",
    "update_url": "https://clients2.google.com/service/update2/crx",
-   "version": "1.6"
+   "version": "1.7"
 }

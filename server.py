@@ -20,10 +20,10 @@ import jinja2
 import json
 import os
 import subprocess
+import sys
 import traceback
 import threading
 import utils
-
 
 logger = logging.getLogger('server')
 
@@ -55,6 +55,7 @@ class Server(BaseHTTPRequestHandler):
             '/render': self.render,
             '/open': self.open_local,
             '/settings': self.settings,
+            '/projects': self.projects,
             '/jquery.js': self.get_jquery,
             '/search': self.search,
             '/graph': self.get_graph,
@@ -88,6 +89,24 @@ class Server(BaseHTTPRequestHandler):
             'can_delete': { kind: Storage.can_delete(kind) for kind in graph.ALL_ITEM_KINDS[1:]},
         })
         self.respond(html)
+
+    def projects(self):
+        data = [
+            "Personal",
+            "Work",
+            {
+                "id" : "history",
+                "text" : "History",
+                "state" : { "opened" : True },
+                "children" : [
+                    {
+                        "text": self.args["q"],
+                        "state" : { "selected" : True },
+                    },
+                ]
+            }
+        ]
+        self.respond(json.dumps(data))
 
     def respond(self, html, content_type=None):
         self.send_response(200)
@@ -132,7 +151,7 @@ class Server(BaseHTTPRequestHandler):
         settings['query'] = query
         duration = self.args.get('duration', 'year')
         logger.info('search %s %s %s' % (email, duration, query))
-        self.graphs[query] = graph.Graph(query, duration)
+        self.graphs[query] = graph.Graph(email, query, duration)
         self.respond('OK')
 
     def stop_loading(self):
@@ -198,6 +217,7 @@ class Server(BaseHTTPRequestHandler):
             if 'path' in item and os.path.exists(item['path']):
                 path = os.path.realpath(item['path'])
                 url = 'file://%s' % path
+                import webbrowser
                 webbrowser.open(url)
         html = '<html><script></script></html>'
         self.respond(html)
@@ -234,7 +254,6 @@ class Server(BaseHTTPRequestHandler):
         basename = os.path.basename(filename)
         filename = os.path.join(dirname, basename)
         path = os.path.join(utils.INSTALL_FOLDER, os.path.join('html', filename))
-        logger.info("load %s" % path)
         with open(path, format) as fp:
             return fp.read()
 
@@ -253,7 +272,7 @@ def run():
     port = settings.get('port', PORT_NUMBER)
     threaded_server = ThreadedHTTPServer(('localhost', port), Server)
 
-    # poller.start()
+    poller.start()
 
     url = 'http://localhost:%d/settings' % port
     url = 'http://localhost:%d' % port
@@ -271,4 +290,8 @@ def run():
             Storage.stop_loading(kind)
 
 if __name__ == '__main__':
-    run()
+    if "clear" in sys.argv:
+        print("Clearing...")
+        settings.clear()
+    else:
+        run()

@@ -1,14 +1,20 @@
 var lastLocation = document.location.href;
 var lastSelection = null;
+var email = "";
+
+chrome.extension.sendMessage({ kind: "ikke-email" }, function(response) {
+  email = response.email;
+  $("#ikke-search-email").text(email);
+});
 
 var timer = setTimeout(function() { }, 1000);
 
-document.addEventListener('mouseup', scheduleImageLoader);
-document.addEventListener('keyup', scheduleImageLoader);
+document.addEventListener('mouseup', scheduleExtractor);
+document.addEventListener('keyup', scheduleExtractor);
 
-function scheduleImageLoader() {
+function scheduleExtractor() {
     clearTimeout(timer);
-    timer = setTimeout(runImageLoader, 5000);
+    timer = setTimeout(runExtractor, 1000);
 }
 
 function getBrowserUrl() {
@@ -18,9 +24,13 @@ function getBrowserUrl() {
     return url.split('##')[0];
 }
 
-function runImageLoader() {
+function getSelectedText() {
+    return window.getSelection().toString() || $(".kix-selection-overlay").parent().text();
+}
+
+function runExtractor() {
     var location = getBrowserUrl();
-    var selection = window.getSelection().toString() || '';
+    var selection = getSelectedText();
     if (location != lastLocation || selection != lastSelection) {
         save_image(location, selection);
         lastLocation = location;
@@ -29,20 +39,18 @@ function runImageLoader() {
 }
 
 function getFirstBigImage() {
-    function isTarget() {
-        var tagName = $(this).prop('tagName');
-        var bg = $(this).css('background-image');
-        return (tagName === 'IMG' || tagName == 'DIV' && bg && bg != 'none') &&
-            $(this).isInViewport() && $(this).width() <= 256 && $(this).height() <= 256;
-    }
-    var images = $('img, div')
-        .filter(isTarget)
+    var images = $('img')
+        .filter(function() {
+            return $(this).offset() && $(this).width() > 100 && $(this).isInViewport();
+        })
         .sort(function(a, b) {
-            return $(b).width()*$(b).height() - $(a).width()*$(a).height();
+            const squareA = Math.abs($(a).width() - $(a).height());
+            const squareB = Math.abs($(b).width() - $(b).height());
+            return squareA - squareB;
         });
-    if (images) {
+    if (images.length) {
         var img = images.eq(0);
-        var src = (img.attr('src') || img.css('background-image') || '').replace('url("', '').replace('")', '');
+        var src = img.attr('src');
         if (src && src.startsWith('//')) {
             src = document.location.protocol + src;
         }
@@ -86,6 +94,6 @@ function save_image(location, selection) {
 }
 
 if (window.self == window.top) {
-    scheduleImageLoader();
+    scheduleExtractor();
     highlightSearch();
 }

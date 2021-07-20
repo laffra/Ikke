@@ -3,11 +3,13 @@
 <html>
     <head>
         <link rel="stylesheet" href="3rd/jquery-ui-1.12.1/jquery-ui.min.css">
+        <link rel="stylesheet" href="3rd/jstree-3.2.1.min.css">
         <link rel="stylesheet" href="main.css">
 
         <script src="3rd/jquery-3.2.1.min.js"></script>
         <script src="3rd/jquery-ui-1.12.1/jquery-ui.min.js"></script>
         <script src="3rd/d3.v4.min.js"></script>
+        <script src="3rd/jstree-3.2.1.min.js"></script>
     </head>
     <body>
         <div id="dashboard">
@@ -53,9 +55,6 @@
                         {% for kind in kinds %}
                         <div id="tabs-{{kind}}">
                             <div class="tab-contents">
-                                {% if kind in premium %}
-                                <pre>Coming soon...</pre>
-                                {% else %}
                                 <div id="summary-{{kind}}" class="summary"></div>
                                 <div id="zoom-buttons-{{kind}}" class="zoom-buttons">
                                     <button class="zoom-button" id="zoom-in-{{kind}}">+</button>
@@ -71,7 +70,8 @@
                                         <a href="https://www.google.com/search?q={{query}}" class="kind">Search at Google</a>
                                     </center>
                                 </div>
-                                {% endif %}
+                                <div id="projects">
+                                </div>
                             </div>
                         </div>
                         {% endfor %}
@@ -79,10 +79,11 @@
                 </td>
             </tr>
         </table>
-        <div id="email">{{account['email']}}</div>";
+        <div id="ikke-search-email"></div>";
         <script>
         window.kinds = {{ kinds|safe }};
         </script>
         <script src="main.js"></script>
+        <script src="projects.js"></script>
     </body>
 </html>

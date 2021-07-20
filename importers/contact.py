@@ -20,7 +20,7 @@ def decode(encoded_string):
     match = re.match(encoded_word_regex, encoded_string)
     if match:
         charset, encoding, encoded_text = match.groups()
-        byte_string = base64.b64decode(encoded_text) if encoding is 'B' else quopri.decodestring(encoded_text)
+        byte_string = base64.b64decode(encoded_text) if encoding == 'B' else quopri.decodestring(encoded_text)
         return byte_string.decode(charset)
     return encoded_string
 
@@ -48,7 +48,7 @@ def find_contact(email, name='', phones=None, timestamp=None):
             'timestamp': timestamp or time.time(),
             'phones': phones or [],
         })
-        logging.info('CONTACT: new contact ==> %s %s' % (email, contact.names))
+        logging.debug('CONTACT: new contact ==> %s %s' % (email, contact.names))
         save_queue.add(contact)
     if name and not name in contact.names:
         contact.names.append(name)
@@ -77,7 +77,7 @@ class Contact(storage.Data):
         self.label = self.name
         self.color = 'purple'
         self.font_size = 14
-        self.timestamp = obj.get('timestamp')
+        self.timestamp = obj.get('timestamp', time.time())
         dict.update(self, vars(self))
 
     @classmethod
@@ -131,7 +131,7 @@ def poll():
 
 def get_status():
     count = settings['contact/count']
-    return '%d contacts were loaded as senders/receivers for gmail messages' % count
+    return '%d contacts' % count
 
 
 def is_loading():
@@ -145,7 +145,7 @@ def stop_loading():
 def cleanup():
     if save_queue:
         logging.debug('CONTACT: cleanup, save %d contacts' % len(save_queue))
-    for n, contact in enumerate(save_queue.copy()):
+    for _, contact in enumerate(save_queue.copy()):
         settings.increment('contact/count')
         contact.save()
     save_queue.clear()

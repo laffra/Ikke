@@ -958,16 +958,20 @@ STOPWORDS_RE = re.compile(STOPWORDS, flags=re.IGNORECASE)
 WORDS_RE = re.compile('([^a-zA-Z0-9])+')
 SPACES_RE = re.compile('[ ]+')
 IS_NUMBER_RE = re.compile('^[0-9]*$')
+HAS_DIGITS_RE = re.compile('.*[0-9].*[0-9].*')
 
 
 def is_stopword(word):
     return remove_stopwords(word) == []
 
+def has_digits(word):
+    return re.match(HAS_DIGITS_RE, word)
+
 def remove_stopwords(s: str) -> []:
     words = re.sub(WORDS_RE, '  ', s)
     contents = re.sub(STOPWORDS_RE, ' ', ' %s ' % words).strip()
     words = re.sub(SPACES_RE, ' ', contents.lower()).split()
-    return [word for word in words if len(word) > 2 and not word.isdigit()]
+    return [word for word in words if len(word) > 2 and not has_digits(word) and not word.isdigit()]
 
 
 if __name__ == '__main__':

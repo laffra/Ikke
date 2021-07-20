@@ -1,6 +1,7 @@
 import datetime
 from collections import defaultdict
 import logging
+from re import I
 from urllib.parse import unquote
 import json
 import time
@@ -12,7 +13,7 @@ from preferences import ChromePreferences
 import os
 import utils
 from threadpool import ThreadPool
-from storage import Storage
+from storage import Data, Storage
 
 days = {
     'day': 1,
@@ -35,13 +36,17 @@ REDUCE_GRAPH_SIZE = False
 
 IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'tiff', 'png', 'raw']
 
+TIME_COUNT = 7
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class Graph:
-    def __init__(self, query, duration_string):
+    def __init__(self, email, query, duration_string):
         logger.info('GRAPH: init %s %s' % (repr(query), duration_string))
+        self.email = email
         self.query = query
+        self.duration_string = duration_string
         self.search_count = {}
         self.search_results = defaultdict(list)
         self.search_duration = defaultdict(list)
@@ -55,11 +60,11 @@ class Graph:
         self.search_duration[kind].append(duration)
         logger.debug('found %d of %s items' % (len(items), kind))
 
-    def search(self, timestamp):
+    def search(self, days):
         start_time = time.time()
-        all_items = list(filter(None, Storage.search(unquote(self.query), timestamp)))
-
+        all_items = list(filter(None, Storage.search(unquote(self.query), days)))
         duration = time.time() - start_time
+
         self.add_result('all', len(all_items), all_items, duration)
         for kind in MY_ITEM_KINDS:
             items = [item for item in all_items if item.kind in ('label', kind)]
@@ -67,7 +72,8 @@ class Graph:
 
     def get_graph(self, kind, keep_duplicates):
         self.my_pool.wait_completion()
-        found_items = list(self.search_results['all' if kind in ['contact', 'file'] else kind])
+        all_found_items = self.search_results['all' if kind in ['contact', 'file'] else kind]
+        found_items = [item for item in all_found_items if item.kind != 'contact' or item.label != self.email]
         add_words = True
         edges, items = classify.get_edges(self.query, found_items, add_words, keep_duplicates)
         removed_item_count = 0
@@ -104,7 +110,58 @@ class Graph:
             for item1, item2 in edges
             if item1 and item1.uid in nodes_index and item2 and item2.uid in nodes_index
         ]
-        logger.info("Found %d links for %d edges" % (len(links), len(edges)))
+
+        timestamps = [item["timestamp"] for item in items if item["timestamp"]]
+        if timestamps:
+            min_timestamp = min(timestamps)
+            max_timestamp = max(timestamps)
+            time_increment = (max_timestamp - min_timestamp) / TIME_COUNT 
+            most_recent = datetime.datetime.fromtimestamp(max_timestamp)
+
+            print("### min:", datetime.datetime.fromtimestamp(min_timestamp))
+            print("### max:", datetime.datetime.fromtimestamp(max_timestamp))
+
+            def time_label(time_ms):
+                timestamp = min_timestamp + time_ms
+                then = datetime.datetime.fromtimestamp(timestamp)
+                diff = most_recent - then
+                if self.duration_string == "day":
+                    hours = int(diff.seconds / 3600)
+                    if hours:
+                        return "%d hour%s ago" % (hours, "s" if hours > 1 else "")
+                else:
+                    if diff.days:
+                        return "%d day%s ago" % (diff.days, "s" if diff.days > 1 else "")
+                if diff.seconds:
+                    return "recently"
+                return "now"
+
+            times = [
+                TimeNode(n, time_label(n * time_increment))
+                for n in range(TIME_COUNT)
+            ]
+
+            def time_index(item):
+                if time_increment:
+                    index = int((item["timestamp"] - min_timestamp) / time_increment)
+                    return min(TIME_COUNT -1, max(0, index))
+                return 0
+
+            for n in range(3):
+                links += [
+                    {
+                        'source': nodes_index[item.uid],
+                        'target': len(nodes_index) + time_index(item),
+                        'color': "#EEE",
+                        'stroke': 1,
+                    }
+                    for item in items
+                    if item["timestamp"] and item['kind'] != 'contact'
+                ]
+            nodes += times
+                        
+        logger.info("Found %d nodes" % len(nodes))
+        logger.info("Found %d links" % len(links))
 
         stats = {
             'found': len(found_items),
@@ -148,3 +205,17 @@ class Graph:
 
     def is_lonely_label(self, item):
         return item.kind == "label" and item.edges == 0
+
+
+class TimeNode(Data):
+    def __init__(self, index, label):
+        super(TimeNode, self).__init__(label)
+        self.uid = "time-%d" % index
+        self.index = index
+        self.kind = 'time'
+        self.color = 'purple'
+        self.icon_size = 12
+        self.zoomed_icon_size = 24
+        self.font_size = 10
+        self.icon = 'get?path=icons/time-icon.png'
+        dict.update(self, vars(self))

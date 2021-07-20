@@ -4,11 +4,12 @@ block_cipher = None
 
 
 a = Analysis(['server.py'],
-             pathex=['/Users/laffra/PycharmProjects/Ikke'],
+             pathex=['/Users/laffra/dev/Ikke'],
              binaries=[],
              datas=[
                 ('installation/*', 'installation'),
                 ('localsearch/*', 'localsearch'),
+                ('importers/*', 'gmail_credentials.json'),
                 ('html/*', 'html'),
                 ('html/icons/*', 'html/icons'),
                 ('html/3rd/*', 'html/3rd'),
@@ -20,10 +21,15 @@ a = Analysis(['server.py'],
              hiddenimports=[
                 'importers',
                 'importers.browser',
+                'importers.calendar',
                 'importers.contact',
-                'importers.download'
+                'importers.download',
                 'importers.file',
+                'importers.git',
                 'importers.gmail',
+                'importers.google_apis',
+                'importers.hangouts',
+                'importers.quickstart',
              ],
              hookspath=[],
              runtime_hooks=[],

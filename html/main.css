@@ -448,3 +448,12 @@ select {
     box-shadow: none;
     outline: 0;
 }
+
+#projects {
+    position: absolute;
+    right: 10px;
+    top: 50px;
+    min-height: 100px;
+    min-width: 100px;
+    font-size: 14px;
+}

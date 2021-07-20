@@ -11,6 +11,8 @@ from googleapiclient.http import BatchHttpRequest
 SCOPES = [
     'https://www.googleapis.com/auth/gmail.readonly',
     'https://www.googleapis.com/auth/calendar.readonly',
+    'https://www.googleapis.com/auth/contacts.readonly',
+    'https://www.googleapis.com/auth/photoslibrary.readonly',
     'https://www.googleapis.com/auth/drive.readonly',
 ]
 

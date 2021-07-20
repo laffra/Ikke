@@ -4,9 +4,9 @@ import os
 
 def get_preferences_path():
     if os.name == 'nt':
-        return ['AppData', 'Local', 'Google', 'Chrome', 'User Data', 'Profile 1', 'preferences']
+        return ['AppData', 'Local', 'Google', 'Chrome', 'User Data', 'Default', 'preferences']
     else:
-        return ['Library', 'Application Support', 'Google', 'Chrome', 'Profile 1', 'Preferences']
+        return ['Library', 'Application Support', 'Google', 'Chrome', 'Default', 'Preferences']
 
 
 class ChromePreferences:
@@ -15,6 +15,7 @@ class ChromePreferences:
         preferences_path = os.path.join(home, *get_preferences_path())
         with open(preferences_path) as fin:
             self.preferences = json.load(fin)
+        print("Loaded Chrome preferences from", preferences_path, self.preferences['account_info'])
 
     def get_language_profile(self):
         return [(l['language'], l['probability']) for l in self.get('language_profile').get('reading').get('preference')]
@@ -30,7 +31,7 @@ class ChromePreferences:
         ], key=lambda pair: -pair[1])
 
     def get_account_info(self):
-        return self.get('account_info')[0]
+        return self.get('account_info')[-1]
 
     def get_email(self):
         return self.get_account_info()['email']

@@ -20,7 +20,7 @@ def get_timestamp(dt=None):
     try:
         return float(time.mktime(dt.timetuple()))
     except:
-        return float(time.mktime(datetime.datetime.now().timetuple()))
+        return float(time.mktime(datetime.datetime.utcnow().timetuple()))
 
 KB = 1024
 MB = 1024 * KB

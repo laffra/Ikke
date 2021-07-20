@@ -27,6 +27,12 @@ class Label(storage.Data):
     def is_related_item(self, other):
         return self.label in other.words
 
+    def is_duplicate(self, duplicates):
+        if self.label in duplicates:
+            return True
+        duplicates.add(self.label)
+        return False
+
 
 class TooMuch(storage.Data):
     def __init__(self, count):

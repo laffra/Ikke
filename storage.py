@@ -1,17 +1,12 @@
 import datetime
 import elasticsearch
 from importlib import import_module
-import itertools
 import json
 import logging
 import os
-import requests
 from settings import settings
 import shutil
 import stat
-import stopwords
-import subprocess
-import traceback
 import utils
 import time
 from collections import defaultdict
@@ -30,9 +25,14 @@ item_handlers = { }
 class Storage:
     stats = defaultdict(int)
     elastic_client = elasticsearch.Elasticsearch([{'host': 'localhost', 'port': '9200'}])
+    elastic_logger = logging.getLogger('elasticsearch')
+    elastic_logger.setLevel(logging.WARNING)
 
     @classmethod
     def add_data(cls, data):
+        if not data['timestamp']:
+            logging.error("Cannot save data without a timestamp %s" % json.dumps(data))
+            return
         cls.elastic_client.index(index=data["kind"], id=data["uid"], body=data, request_timeout=30)
 
     @classmethod
@@ -52,15 +52,16 @@ class Storage:
         assert isinstance(days, int), 'unexpected type %s: %s' % (type(days), days)
         cls.stats = defaultdict(int)
         search_start = time.time()
-        since = (datetime.datetime.now() - datetime.timedelta(days=days)).timestamp()
+        since = (datetime.datetime.utcnow() - datetime.timedelta(days=days)).timestamp()
         hits = cls.search_indexes(query, since)
         items = list(filter(None, [cls.resolve(hit) for hit in hits if cls.relevant(hit)]))
         cls.truncate_words(items, 5)
         items = cls.remove_negatives(query, items)
         items = items + cls.get_related_items(items)
         items = cls.remove_negatives(query, items)
-        logger.info("Found %d items for '%s' since %s" % (len(items), query, datetime.datetime.fromtimestamp(since)))
-        cls.record_search_stats(query, time.time() - search_start, len(items))
+        duration = time.time() - search_start
+        logger.info("Found %d items for '%s' since %d days in %.2fms" % (len(items), query, days, duration))
+        cls.record_search_stats(query, duration, len(items))
         return items
 
     @classmethod
@@ -93,7 +94,7 @@ class Storage:
                         "must": {
                             "query_string": {
                                 "query": cls.wildcard(query),
-                                "fuzziness": "2",
+                                "fuzziness": "AUTO",
                                 "default_operator": "OR" if " OR " in query else "AND",
                                 "default_field": "*"
                             }
@@ -109,7 +110,6 @@ class Storage:
                 }
             }
         )["hits"]["hits"]
-        logger.info("Found %d hits" % len(hits))
         return list(filter(None, [hit["_source"] for hit in hits]))
 
     @classmethod
@@ -140,11 +140,13 @@ class Storage:
                 }
             }
         )
-        for bucket in result["aggregations"]["byindex"]["buckets"]:
-            kind = bucket["key"]
-            settings["%s/youngest" % kind] = bucket["max"]["value"]
-            settings["%s/oldest" % kind] = bucket["min"]["value"]
-            settings["%s/count" % kind] = bucket["doc_count"]
+        if "aggregations" in result:
+            for bucket in result["aggregations"]["byindex"]["buckets"]:
+                kind = bucket["key"]
+                settings["%s/youngest" % kind] = bucket["max"]["value"]
+                settings["%s/oldest" % kind] = bucket["min"]["value"]
+                settings["%s/count" % kind] = bucket["doc_count"]
+        logger.debug("STATS: %s" % json.dumps(settings, indent=4))
 
     @classmethod
     def relevant(cls, obj):
@@ -215,13 +217,13 @@ class Storage:
     @classmethod
     def get_day_month_year(cls, days):
         # type: (int) -> str
-        dt = datetime.datetime.now() - datetime.timedelta(days=days)
+        dt = datetime.datetime.utcnow() - datetime.timedelta(days=days)
         return '%s/%s/%s' % (dt.day, dt.month, dt.year)
 
     @classmethod
     def get_year_month_day(cls, days):
         # type: (int) -> str
-        dt = datetime.datetime.now() - datetime.timedelta(days=days)
+        dt = datetime.datetime.utcnow() - datetime.timedelta(days=days)
         return '%4d-%02d-%02d' % (dt.year, dt.month, dt.day)
 
     @classmethod
@@ -275,6 +277,8 @@ class Storage:
         except Exception as e:
             logger.error('Could not stop delete all %s: %s' % (kind, e))
         finally:
+            for key in [key for key in settings.keys() if key.startswith('%s/' % kind)]:
+                del settings[key]
             settings['%s/deleting' % kind] = False
             settings['%s/count' % kind] = 0
 
@@ -302,6 +306,7 @@ class Storage:
 
     @classmethod
     def get_status(cls):
+        cls.load_stats()
         status = {}
         start = time.time()
         for kind in ITEM_KINDS:
@@ -416,6 +421,3 @@ if __name__ == '__main__':
     if True:
         print(json.dumps(Storage.get_all('browser'), indent=4))
         print(Storage.search('insights'))
-
-
-Storage.load_stats()

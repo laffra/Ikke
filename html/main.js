@@ -35,8 +35,6 @@ $(document).keyup(function(){
     altKeyPressed = false;
 });
 
-var email = $("#email").text();
-
 function init_tabs() {
     $('#tabs')
         .tabs({
@@ -143,13 +141,26 @@ function render() {
         }
     };
 
-    $.get("search?email=" + email + "&" + get_args(query, ''), function() {
-        d3.range(kinds.length).forEach(function(index) {
-            if (index == localStorage.tab) {
-                render_tab(index);
-            }
-        })
-    });
+    run_query(query);
+}
+
+function run_query(query) {
+    var email = $("#ikke-search-email").text();
+    $(".spinner")
+        .css("margin-left", window.innerWidth/3)
+        .css("margin-top", window.innerHeight/4)
+        .css("display", "block");
+    if (!email) {
+        setTimeout(() => run_query(query), 10);
+    } else {
+        $.get("search?email=" + email + "&" + get_args(query, ''), function() {
+            d3.range(kinds.length).forEach(function(index) {
+                if (index == localStorage.tab) {
+                    render_tab(index);
+                }
+            })
+        });
+    }
 
 }
 
@@ -158,14 +169,6 @@ function render_tab(index) {
     var h = window.innerHeight;
     var kind = kinds[index];
     $("#tabs-" + kind + ' svg').remove();
-    setTimeout(function() {
-        if (!search_finished[kind]) {
-            $(".spinner")
-                .css("margin-left", w/3)
-                .css("margin-top", h/4)
-                .css("display", "block");
-        }
-    }, 500);
     if (RENDER_AS_GRID) {
         load_grid(kind, w, h - TOP_HEIGHT);
     } else {
@@ -191,38 +194,38 @@ function load_grid(kind, w, h) {
             ]));
         }
         var sorted_nodes = graph.nodes.sort(function compare(a, b) {
-        return a.timestamp < b.timestamp ? 1 : -1;
-    });
-    function get_icon(node) {
-        return node.kind == 'contact' ? 'get?path=icons/person-icon.png' : node.icon;
-    }
-    $.each(sorted_nodes, function(index, node) {
-        if (node.kind == kind || (kind == 'all' && node.kind != 'label')) {
-            table.append($('<tr>')
-                .on("click", function() {
-                    var row = $(this);
-                    launch(node);
-                })
-                .attr('kind', node.kind)
-                .attr('label', node.label)
-                .attr('url', node.url)
-                .attr('path', node.path)
-                .append([
-                    $('<td width=10>').append(
-                        $('<img class="grid-icon">').attr('src', get_icon(node)).css('width', '16px')
-                    ),
-                    $('<td width=600>').html(node.url || node.subject || (node.kind == 'contact' ? '<i>Contact:</i> ' : ' ') + node.label),
-                    $('<td>').html(nobreaks((node.date || '').split(' ')[0])),
-                    $('<td width=400>').html(nobreaks(node.persons.map(x => x.label).join(', ')))
-                    ]));
-            } else {
-              console.log('skip grid: ' + node.kind + ' ' + node.label)
-            }
-        })
-        $('.grid-icon').on('error', function() {
-            $(this).attr('src', "get?path=icons/browser-web-icon.png");
-        })
-    });
+            return a.timestamp < b.timestamp ? 1 : -1;
+        });
+        function get_icon(node) {
+            return node.kind == 'contact' ? 'get?path=icons/person-icon.png' : node.icon;
+        }
+        $.each(sorted_nodes, function(index, node) {
+            if (node.kind == kind || (kind == 'all' && node.kind != 'label')) {
+                table.append($('<tr>')
+                    .on("click", function() {
+                        var row = $(this);
+                        launch(node);
+                    })
+                    .attr('kind', node.kind)
+                    .attr('label', node.label)
+                    .attr('url', node.url)
+                    .attr('path', node.path)
+                    .append([
+                        $('<td width=10>').append(
+                            $('<img class="grid-icon">').attr('src', get_icon(node)).css('width', '16px')
+                        ),
+                        $('<td width=600>').html(node.url || node.subject || (node.kind == 'contact' ? '<i>Contact:</i> ' : ' ') + node.label),
+                        $('<td>').html(nobreaks((node.date || '').split(' ')[0])),
+                        $('<td width=400>').html(nobreaks(node.persons.map(x => x.label).join(', ')))
+                        ]));
+                } else {
+                console.log('skip grid: ' + node.kind + ' ' + node.label)
+                }
+            })
+            $('.grid-icon').on('error', function() {
+                $(this).attr('src', "get?path=icons/browser-web-icon.png");
+            })
+        });
 }
 
 function clear_spinner(kind, error, graph) {
@@ -318,8 +321,6 @@ function load_graph(kind, w, h) {
             .alpha(ALPHA_INITIAL)
             .alphaDecay(0.1);
 
-    var w = $(window).width();
-    var h = $(window).height() - TOP_HEIGHT;
     var zoom = d3.zoom().scaleExtent([0.3, 2]).on("zoom", zoomed);
     var svg = d3.select("#tabs-" + kind)
         .append("svg")
@@ -344,7 +345,9 @@ function load_graph(kind, w, h) {
         zoom.scaleTo(svg, current_zoom_scale *= 0.7);
     });
 
+    graph_start = new Date().getTime();
     d3.json("graph?" + get_args(query, kind), function(error, graph) {
+        graph_loaded = new Date().getTime();
         svg.attr("width", w - 2 * $('.logo').width() - 96)
            .attr("height", h + TOP_HEIGHT);
         clear_spinner(kind, error, graph);
@@ -371,6 +374,10 @@ function load_graph(kind, w, h) {
         graph.nodes.forEach(function(d) {
             d.vx = 3;
             d.vy = 0.1
+            if (d.uid.startsWith("time-")) {
+                d.fx = d.index * w/6 - w/3;
+                d.fy = h/2;
+            }
         });
 
         function getId(d, type) {
@@ -385,65 +392,77 @@ function load_graph(kind, w, h) {
         }
 
         function zoomInNode(d) {
-            var keep_duplicates = $.urlParam('d') == '1';
-            if (d.kind !== 'label') {
-                d3.select(selectId(d, 'border'))
-                    .transition()
-                    .style("stroke", "#ddd")
-                    .style("stroke-width", "2px")
-                    .attr("x", function(d) { return -d.zoomed_icon_size/2 - 2; })
-                    .attr("y", function(d) { return -d.zoomed_icon_size/2 - 2; })
-                    .attr("width", function(d) { return d.icon_size > 32 ? d.zoomed_icon_size + 4 : 0; })
-                    .attr("height", function(d) { return d.zoomed_icon_size + 4; })
-                d3.select(selectId(d, 'text'))
-                    .text(function(d) {
-                        return (d.title || d.label)
-                            .replace(/\?.*/, '')
-                            .replace(/https+:\/\/[^\/]*\//, '')
-                    })
-                    .transition()
-                    .attr("y", function(d) { return 2 + 2 * Math.max(16, d.font_size) + d.zoomed_icon_size/2; })
-                    .style("font-size", function(d) { return 2 * Math.max(16, d.font_size) + 'px'; })
-                d3.select(this)
-                    .transition()
-                    .attr("x", function(d) { return -d.zoomed_icon_size/2; })
-                    .attr("y", function(d) { return -d.zoomed_icon_size/2; })
-                    .attr("width", function(d) { return d.zoomed_icon_size; })
-                    .attr("height", function(d) { return d.zoomed_icon_size; })
-            }
+            if (d.kind === 'label' && d.kind !== 'time') return;
+            d3.select(selectId(d, 'border'))
+                .transition()
+                .style("stroke", "#ddd")
+                .style("stroke-width", "2px")
+                .attr("x", function(d) { return -d.zoomed_icon_size/2 - 2; })
+                .attr("y", function(d) { return -d.zoomed_icon_size/2 - 2; })
+                .attr("width", function(d) { return d.icon_size > 32 ? d.zoomed_icon_size + 4 : 0; })
+                .attr("height", function(d) { return d.zoomed_icon_size + 4; })
+            d3.select(selectId(d, 'text'))
+                .text(function(d) {
+                    return (d.title || d.label)
+                        .replace(/\?.*/, '')
+                        .replace(/https+:\/\/[^\/]*\//, '')
+                })
+                .transition()
+                .attr("y", function(d) { return 2 + 2 * Math.max(16, d.font_size) + d.zoomed_icon_size/2; })
+                .style("font-size", function(d) { return 2 * Math.max(16, d.font_size) + 'px'; })
+            d3.select(this)
+                .transition()
+                .attr("x", function(d) { return -d.zoomed_icon_size/2; })
+                .attr("y", function(d) { return -d.zoomed_icon_size/2; })
+                .attr("width", function(d) { return d.zoomed_icon_size; })
+                .attr("height", function(d) { return d.zoomed_icon_size; })
+        }
+
+        function zoomInLabel(d) {
+            if (d.kind !== 'label' && d.kind !== 'time') return;
+            d3.select(selectId(d, 'text'))
+                .transition()
+                .attr("fill", function(d) { return 'black'; })
+                .style("font-size", function(d) { return 2 * Math.max(16, d.font_size) + 'px'; })
         }
 
         function zoomOutNode(d) {
-            d3.select(this);
-            if (d.kind !== 'label') {
-                d3.select( this )
-                    .transition()
-                    .duration(1000)
-                    .attr("x", function(d) { return -d.icon_size/2; })
-                    .attr("y", function(d) { return -d.icon_size/2; })
-                    .attr("width", function(d) { return d.icon_size; })
-                    .attr("height", function(d) { return d.icon_size; })
+            if (d.kind === 'label' && d.kind !== 'time') return;
+            d3.select(this)
+                .transition()
+                .duration(1000)
+                .attr("x", function(d) { return -d.icon_size/2; })
+                .attr("y", function(d) { return -d.icon_size/2; })
+                .attr("width", function(d) { return d.icon_size; })
+                .attr("height", function(d) { return d.icon_size; })
+            d3.select(selectId(d, 'text'))
+                .transition()
+                .duration(500)
+                .attr("y", function(d) { return d.font_size + d.icon_size/2; })
+                .style("font-size", 0)
+            setTimeout(function() {
                 d3.select(selectId(d, 'text'))
                     .transition()
-                    .duration(500)
-                    .attr("y", function(d) { return d.font_size + d.icon_size/2; })
-                    .style("font-size", 0)
-                setTimeout(function() {
-                    d3.select(selectId(d, 'text'))
-                        .transition()
-                        .duration(100)
-                        .text(function(d) { return d.label; })
-                        .style("font-size", function(d) { return d.font_size + 'px'; });
-                }, 500);
-                d3.select(selectId(d, 'border'))
-                    .transition()
-                    .duration(1000)
-                    .style("stroke-width", "1px")
+                    .duration(100)
+                    .text(function(d) { return d.label; })
+                    .style("font-size", function(d) { return d.font_size + 'px'; });
+            }, 500);
+            d3.select(selectId(d, 'border'))
+                .transition()
+                .duration(1000)
+                .style("stroke-width", "1px")
                     .attr("x", function(d) { return -d.icon_size/2; })
                     .attr("y", function(d) { return -d.icon_size/2; })
                     .attr("width", function(d) { return d.icon_size > 32 ? d.icon_size : 0; })
                     .attr("height", function(d) { return d.icon_size; });
-            }
+        }
+
+        function zoomOutLabel(d) {
+            if (d.kind !== 'label' && d.kind !== 'time') return;
+            d3.select(selectId(d, 'text'))
+                .transition()
+                .attr("fill", function(d) { return d.color; })
+                .style("font-size", function(d) { return d.font_size + 'px'; })
         }
 
         function setCollideRadius() {
@@ -536,9 +555,11 @@ function load_graph(kind, w, h) {
             .on("mouseenter", zoomInNode)
             .on("mouseleave", zoomOutNode)
 
-        node.on("mouseenter", function() { d3.select(this).raise(); });
+        node.on("mouseenter", function() {
+            d3.select(this).raise();
+        });
 
-        node.on('mouseover', function(d) {
+        node.on('mouseenter', function(d) {
             link.transition()
                 .duration(300)
                 .style('stroke-opacity', function(l) { return (d === l.source || d === l.target) ? 1 : 0.25 })
@@ -560,7 +581,9 @@ function load_graph(kind, w, h) {
             .style("font-size", function(d) { return d.font_size; })
             .attr("fill", function(d) { return d.color; })
             .text(function(d) { return d.image ? d.domain : d.label; })
-            .style("text-anchor", "middle");
+            .style("text-anchor", "middle")
+            .on("mouseenter", zoomInLabel)
+            .on("mouseleave", zoomOutLabel);
 
 
         node.on("click", function(d) {
@@ -585,7 +608,7 @@ function load_graph(kind, w, h) {
 
         function warmup() {
             shake(ALPHA_SHAKE);
-            setInitialZoomScale();
+            // setInitialZoomScale();
         }
 
         function setInitialZoomScale() {
@@ -617,6 +640,9 @@ function load_graph(kind, w, h) {
         resize();
         d3.select(window).on("resize", resize);
         warmup();
+        graph_rendered = new Date().getTime();
+        console.log("GRAPH loaded", graph_loaded - graph_start)
+        console.log("GRAPH rendered", graph_rendered - graph_start)
     });
 }
 
@@ -635,6 +661,7 @@ function launch(obj) {
 
 function open_file(obj) {
     console.log("Open", obj);
+    var email = $("#ikke-search-email").text();
     $.get("open?email=" + email + "&path=" + obj["path"], function() {
         console.log("Opened", obj);
     });

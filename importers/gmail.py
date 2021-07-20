@@ -2,30 +2,27 @@ import base64
 from collections import Counter
 from importers import contact
 from importers import file
+from importers import Importer
 from importers import google_apis
 import datetime
 import email
 import email.header
 import email.utils
 import htmlparser
-import imaplib
 import json
 import logging
 from preferences import ChromePreferences
 from settings import settings
 import os
-import pickle
 import re
 import stopwords
 import storage
 import time
-import traceback
 import urllib
 import utils
 from urllib.parse import urlparse
 
 
-MAXIMUM_DAYS_LOAD = 3650
 MAXIMUM_THREAD_COUNT = 15
 URL_MATCH_RE = re.compile(r'https?://[\w\d:#@%/;$()~_?\+-=\.&]*')
 DATESTRING_RE = re.compile(' [-+].*')
@@ -45,15 +42,16 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 gmail_service = google_apis.get_google_service("gmail", "v1")
 
-
-class GMail():
+class GMail(Importer):
     singleton = None
-    messages_loaded = 0
 
     def __init__(self):
+        super().__init__()
         self.error = None
         self.inbox = None
         self.sent = None
+        self.kind = "gmail"
+        GMail.singleton = self
 
     def __enter__(self):
         return self
@@ -130,47 +128,34 @@ class GMail():
     def get_domain(cls, url):
         return urlparse(url).netloc
 
-    @classmethod
-    def load_messages(cls, count, start=0):
-        try:
-            logger.info('Loading gmail for the 1ast %s days - %s days back' % (count, start))
-            cls.messages_loaded = 0
-
-            day = start
-            reader = GMail()
-            while settings['gmail/loading'] and day < count:
+    def load_items(self, days_after, days_before):
+        day = days_before
+        while settings['gmail/loading'] and day < days_after:
+            try:
+                self.update_days(day)
                 try:
-                    before = datetime.date.today() + datetime.timedelta(1) - datetime.timedelta(day)
-                    after = before - datetime.timedelta(2)
-                    query = "before: {0} after: {1}".format(before.strftime('%Y/%m/%d'), after.strftime('%Y/%m/%d'))
-                    try:
-                        result = gmail_service.users().messages().list(userId="me", maxResults=1000, q=query).execute()
-                        logger.info("Load {0} => {1}".format(query, len(result["messages"])))
+                    query = "newer_than:{0}d older_than:{1}d".format(day + 1, day)
+                    result = gmail_service.users().messages().list(userId="me", maxResults=1000, q=query).execute()
+                    if "messages" in result:
+                        logger.info("Load {0} => {1} messages".format(query, len(result["messages"])))
                         requests = [
                             gmail_service.users().messages().get(userId = 'me', id = msg_id['id'])
                             for msg_id in result["messages"]
                         ]
-                        google_apis.batch(gmail_service, requests, reader.parse_message)
-                    except urllib.error.URLError:
-                        logger.info("Gmail service timed out. Trying again in %s seconds" % GMAIL_RETRY_DELAY)
-                        time.sleep(GMAIL_RETRY_DELAY)
-                        continue
-                    contact.cleanup()
-                    logger.debug('Processed %d inbox and %d sent messages for day %d' % (0, 0, day))
-                    logger.info(cls.get_status())
-                except Exception as e:
-                    logger.error('Cannot load message for day %d: %s' % (day, e))
-                    import traceback
-                    traceback.print_exc()
-                    return
-                else:
-                    settings['gmail/days'] = max(day, settings['gmail/days'])
-                    day += 1
-        finally:
-            contact.cleanup()
-            storage.Storage.log_search_stats()
-            logger.info('Loaded %d messages in total' % cls.messages_loaded)
-            storage.Storage.load_stats()
+                        google_apis.batch(gmail_service, requests, self.parse_message)
+                except urllib.error.URLError:
+                    logger.info("Gmail service timed out. Trying again in %s seconds" % GMAIL_RETRY_DELAY)
+                    time.sleep(GMAIL_RETRY_DELAY)
+                    continue
+                contact.cleanup()
+                logger.debug('Processed %d inbox and %d sent messages for day %d' % (0, 0, day))
+            except Exception as e:
+                logger.error('Cannot load message for day %d: %s' % (day, e))
+                import traceback
+                traceback.print_exc()
+                return
+            else:
+                day += 1
 
     def parse_message(self, request_id, msg, exception):
         if not settings["gmail/loading"]:
@@ -193,7 +178,6 @@ class GMail():
         if "CHAT" in msg.get("labelIds", []):
             kind = 'hangouts'
         settings.increment('%s/count' % kind)
-        logger.info("%s %s: %s" % (datetime.datetime.fromtimestamp(timestamp), names, subject))
         storage.Storage.add_data({
             'uid': msg['uid'] or msg['Message-ID'],
             'message_id': headers.get('Message-ID', msg['uid']),
@@ -249,33 +233,7 @@ class GMail():
 
     @classmethod
     def get_status(cls):
-        count = settings['gmail/count']
-        days = settings['gmail/days']
-        if settings["gmail/loading"]:
-            return 'Loaded %d messages' % count
-        youngest = datetime.datetime.fromtimestamp(settings['gmail/youngest']).date()
-        oldest = datetime.datetime.fromtimestamp(settings['gmail/oldest']).date()
-        return '%d gmail messages loaded up to %s days between %s and %s' % (count, days, oldest, youngest)
-
-    @classmethod
-    def load(cls, days_count=1, days_start=0):
-        # type (int,bool) -> None
-        if 'gmail/lastload' not in settings:  # this is the very first load
-            days_count = MAXIMUM_DAYS_LOAD
-        settings['gmail/lastload'] = time.time()
-        settings['gmail/loading'] = True
-        settings['gmail/count'] = 0
-
-        timestamp_youngest = settings['gmail/youngest']
-        days_count_youngest = 1 + (datetime.datetime.now() - datetime.datetime.fromtimestamp(timestamp_youngest)).days
-        cls.load_messages(days_count_youngest, 0)
-
-        timestamp_oldest = settings['gmail/oldest']
-        days_count_oldest = (datetime.datetime.now() - datetime.datetime.fromtimestamp(timestamp_oldest)).days - 1
-        cls.load_messages(days_count, days_count_oldest)
-
-        settings['gmail/loading'] = False
-        storage.Storage.stats.clear()
+        return Importer.get_status("gmail", "email")
 
 
 class GMailNode(storage.Data):
@@ -289,7 +247,6 @@ class GMailNode(storage.Data):
         self.persons = list(filter(None, [contact.find_contact(email) for email in self.emails]))
         self.in_reply_to = obj.get('in_reply_to', '')
         self.subject = obj.get('subject', '')
-        self.words = list(sorted(obj.get('words', []))) or self.subject.split()
         self.rest = obj.get('rest', '')
         self.kind = obj.get('kind')
         self.timestamp = obj.get('timestamp')
@@ -302,6 +259,7 @@ class GMailNode(storage.Data):
         self.url_domains = obj.get('url_domains', [])
         self.files = list(filter(lambda file: not file.endswith(".ics"), obj.get('files', [])))
         self.label = self.label or ' '.join(self.words + [str(len(self.files))]) 
+        self.words = self.label.split() or list(sorted(obj.get('words', []))) or self.subject.split() 
         self.connected = False
         dict.update(self, vars(self))
 
@@ -328,7 +286,7 @@ class GMailNode(storage.Data):
         return files + self.persons
 
     def is_duplicate(self, duplicates):
-        key = "gmail - %s" % ' '.join(self.words[:3])
+        key = "gmail - %s" % ' '.join(sorted(word for word in self.words if not stopwords.is_stopword(word)))
         if key in duplicates:
             self.duplicate = True
             return True
@@ -343,28 +301,26 @@ def _render(args):
 
 def render(args):
     import re
-    words = list(filter(lambda word: re.match("^[a-zA-Z]*$", word), args["subject"].split()))[:10]
+    words = args["query"].split() + list(filter(lambda word: re.match("^[a-zA-Z]*$", word), args["subject"].split()))[:10]
     logger.info(args["subject"])
     logger.info(words)
     url = 'https://mail.google.com/mail/u/0/#search/%s' % urllib.parse.quote(' '.join(words))
     return '<script>document.location=\'%s\';</script>' % url
 
-def delete_all():
-    settings['gmail/days'] = 0
-
-
 def load():
-    days = settings['gmail/days']
-    GMail.load(days + 365, days)
-
+    GMail.singleton.load()
 
 def poll():
-    GMail.load(1, 0)
+    load()
+
+def delete_all():
+    pass
 
 
 settings['gmail/can_load_more'] = True
 settings['gmail/pending'] = 'gmail/username' not in settings
 
+GMail.singleton = GMail()
 get_status = GMail.get_status
 
 
@@ -375,11 +331,19 @@ def deserialize(obj):
 def cleanup():
     pass
 
-if __name__ == '__main__':
-    # settings.clear()
-    # load(1, 0, True)
-    # load(3650, 0, True)
-    GMail.load(8, 7)
-    # logger.info('History: %s' % history())
-    # poll()
+def test():
+    global DAYS_LOAD
+    global MAXIMUM_DAYS_LOAD
+    logger.info("############### start")
+    settings.clear()
+    MAXIMUM_DAYS_LOAD = DAYS_LOAD = 1
+    logger.info("############### load")
+    load()
+    logger.info("############### poll 1")
+    poll()
+    logger.info("############### poll 2")
+    poll()
+    logger.info("############### poll 3")
+    poll()
+    logger.info("############### done")
 

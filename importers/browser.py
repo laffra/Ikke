@@ -1,4 +1,5 @@
 import datetime
+from importers import Importer
 import json
 import logging
 import os
@@ -8,6 +9,7 @@ from settings import settings
 import shutil
 import sqlite3
 from storage import Storage
+import sys
 import time
 import utils
 from urllib.parse import urlparse
@@ -76,12 +78,14 @@ def get_favicon(url):
 
 
 def save_image(url, title, image, favicon, selection, timestamp=0, force=False):
+    logger.info("Save browser image %s image=%s selection=%s" % (url, image, selection))
     if is_meta_site(url):
         return
     domain = urlparse(url).netloc
     title = ' '.join(stopwords.remove_stopwords(title))
     selection = ' '.join(stopwords.remove_stopwords(selection))
     uid = '#'.join([domain, str(timestamp), title])
+    timestamp = timestamp or utils.get_timestamp()
     settings.increment('browser/added')
     settings.increment('browser/count')
     Storage.add_data({
@@ -94,9 +98,14 @@ def save_image(url, title, image, favicon, selection, timestamp=0, force=False):
         'icon': favicon,
         'selection': selection,
         'title': title,
-        'timestamp': timestamp or utils.get_timestamp()
+        'timestamp': timestamp,
     })
+    update_timestamp(timestamp)
 
+
+def update_timestamp(timestamp):
+    settings['browser/timestamp_before'] = max(timestamp, settings.get('browser/timestamp_before', 0))
+    settings['browser/timestamp_after'] = min(timestamp, settings.get('browser/timestamp_after', sys.maxsize))
 
 
 def load_history():
@@ -130,9 +139,7 @@ def load_history():
 
 
 def get_status():
-    count = settings['browser/count']
-    when = datetime.datetime.fromtimestamp(settings.get('browser/when', time.time())).date()
-    return '%d sites loaded from your browser history on %s' % (count, when)
+    return Importer.get_status("browser", "sites")
 
 
 def delete_all():
@@ -165,6 +172,7 @@ class BrowserNode(storage.Data):
         self.image = obj.get('image','')
         self.url = obj.get('url', '')
         self.domain, self.timestamp, self.title = obj['uid'].split('#')
+        self.timestamp = float(self.timestamp)
         self.label = self.domain
         self.selection = obj.get('selection', '')
         words = (self.selection + ' ' + self.title).split(' ')

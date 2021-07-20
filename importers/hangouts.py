@@ -1,7 +1,7 @@
 import logging
 from settings import settings
 import storage
-from importers import gmail
+from importers import Importer, gmail
 import urllib
 
 keys = ('uid', 'timestamp')
@@ -11,7 +11,7 @@ def deserialize(obj):
     return HangoutNode(obj)
 
 def get_status():
-    return '%d hangouts messages were loaded' % settings['hangouts/count']
+    return Importer.get_status("hangouts", "messages")
 
 
 def delete_all():
@@ -60,10 +60,11 @@ def render(args):
     import re
     words = list(filter(lambda word: re.match("^[a-zA-Z]*$", word), args["subject"].split()))[:10]
     url = 'https://mail.google.com/mail/u/0/#search/in:chats %s' % urllib.parse.quote(' '.join(words))
+    # url = 'https://mail.google.com/chat/u/0/#search/%s' % urllib.parse.quote(' '.join(words))
     return '<script>document.location=\'%s\';</script>' % url
 
 
-settings['hangouts/can_load_more'] = True
+settings['hangouts/can_load_more'] = False
 settings['hangouts/can_delete'] = True
 
 deserialize = HangoutNode.deserialize

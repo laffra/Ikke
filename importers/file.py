@@ -37,7 +37,7 @@ def deserialize(obj):
 
 
 def get_status():
-    return '%d files were loaded as attachments for gmail messages' % settings['file/count']
+    return '%d files' % settings['file/count']
 
 
 def delete_all():
