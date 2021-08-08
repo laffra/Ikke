@@ -1,3 +1,4 @@
+from genericpath import getsize
 import json
 import logging
 import os
@@ -131,17 +132,25 @@ class FileItem(storage.Data):
         self.path = self.uid
         self.icon = get_icon(self.path)
         self.icon_size = 44
-        self.zoomed_icon_size = 156
+        self.zoomed_icon_size = 512
         dict.update(self, vars(self))
 
     def is_related_item(self, other):
         return False
 
-    def get_related_items(self):
-        return []
+    def get_key(self):
+        path = os.path.join(utils.FILE_DIR, self.path)
+        return 'file-%s-%s' % (self.label, os.path.getsize(path))
+
+    def is_duplicate(self, duplicates):
+        key = self.get_key()
+        if key in duplicates:
+            self.mark_duplicate()
+            return True
+        duplicates.add(key)
 
     def __eq__(self, other):
-        return self.kind == other.kind and self.path == other.path
+        return self.kind == other.kind and self.get_key() == other.get_key()
 
     def __hash__(self):
         return hash(self.path)

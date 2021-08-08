@@ -78,16 +78,19 @@ def get_favicon(url):
 
 
 def save_image(url, title, image, favicon, selection, timestamp=0, force=False):
-    logger.info("Save browser image %s image=%s selection=%s" % (url, image, selection))
     if is_meta_site(url):
         return
     domain = urlparse(url).netloc
-    title = ' '.join(stopwords.remove_stopwords(title))
-    selection = ' '.join(stopwords.remove_stopwords(selection))
-    uid = '#'.join([domain, str(timestamp), title])
     timestamp = timestamp or utils.get_timestamp()
+    title = ' '.join(stopwords.remove_stopwords(title))
+    uid = '#'.join([domain, title])
+    data = Storage.get_data("browser", uid)
+    selection = "%s %s" % (selection, data.get("selection", "") if data else "")
+    image = image or data.get("image", image) if data else ""
+    selection = ' '.join(stopwords.remove_stopwords(selection))
     settings.increment('browser/added')
     settings.increment('browser/count')
+    logger.info("Save browser image %s image=%s timestamp=%s selection=%s" % (url, image, timestamp, selection))
     Storage.add_data({
         'kind': 'browser',
         'uid': uid,
@@ -139,7 +142,7 @@ def load_history():
 
 
 def get_status():
-    return Importer.get_status("browser", "sites")
+    return Importer.get_status("browser", "site")
 
 
 def delete_all():
@@ -171,8 +174,9 @@ class BrowserNode(storage.Data):
         self.uid = obj['uid']
         self.image = obj.get('image','')
         self.url = obj.get('url', '')
-        self.domain, self.timestamp, self.title = obj['uid'].split('#')
-        self.timestamp = float(self.timestamp)
+        print("UID:", obj["uid"])
+        self.domain, self.title = obj['uid'].split('#')
+        self.timestamp = float(obj.get('timestamp', '0'))
         self.label = self.domain
         self.selection = obj.get('selection', '')
         words = (self.selection + ' ' + self.title).split(' ')
@@ -203,15 +207,14 @@ class BrowserNode(storage.Data):
         return other.kind == 'browser' and self.domain == other.domain
 
     def __eq__(self, other):
-        return other.kind == 'browser' and self.domain == other.domain and self.title == other.title
+        return other.kind == 'browser' and self.domain == other.domain and self.timestamp == other.timestamp and self.title == other.title
 
     def __hash__(self):
         return hash("%s-%s" % (self.domain, self.title))
 
     def is_duplicate(self, duplicates):
-        if is_meta_site(self.url):
-            return True
-        if self.domain in duplicates:
+        if is_meta_site(self.url) or self.domain in duplicates:
+            self.mark_duplicate()
             return True
         duplicates.add(self.domain)
         return False

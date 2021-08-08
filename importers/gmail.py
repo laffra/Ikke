@@ -29,6 +29,7 @@ DATESTRING_RE = re.compile(' [-+].*')
 CLEANUP_FILENAME_RE = re.compile('[<>@]')
 MY_EMAIL_ADDRESS = ChromePreferences().get_email()
 GMAIL_RETRY_DELAY = 30
+MAX_RELATED_PERSON_COUNT = 11
 
 keys = (
     'uid', 'message_id', 'senders', 'ccs', 'receivers', 'thread',
@@ -244,12 +245,12 @@ class GMailNode(storage.Data):
         self.color = 'darkred'
         self.names = obj.get('names', [])
         self.emails = obj.get('emails', [])
-        self.persons = list(filter(None, [contact.find_contact(email) for email in self.emails]))
+        self.timestamp = obj.get('timestamp', 0)
+        self.persons = list(filter(None, [contact.find_contact(email, timestamp=self.timestamp) for email in self.emails]))
         self.in_reply_to = obj.get('in_reply_to', '')
         self.subject = obj.get('subject', '')
         self.rest = obj.get('rest', '')
         self.kind = obj.get('kind')
-        self.timestamp = obj.get('timestamp')
         self.icon = 'get?path=icons/gmail-icon.png'
         self.icon_size = 24
         self.font_size = 10
@@ -267,7 +268,7 @@ class GMailNode(storage.Data):
         return hash(self.uid)
 
     def is_related_item(self, other):
-        if self.url_domains and other.kind == 'browser':
+        if False and self.url_domains and other.kind == 'browser':
             related = other.domain == self.url_domains[0]
         elif other.kind == 'gmail':
             related = not self.connected and self.label == other.label
@@ -283,12 +284,12 @@ class GMailNode(storage.Data):
 
     def get_related_items(self):
         files = [file.load_file(self.uid, filename) for filename in self.files]
-        return files + self.persons
+        return super().get_related_items() + files + self.persons[:MAX_RELATED_PERSON_COUNT]
 
     def is_duplicate(self, duplicates):
         key = "gmail - %s" % ' '.join(sorted(word for word in self.words if not stopwords.is_stopword(word)))
         if key in duplicates:
-            self.duplicate = True
+            self.mark_duplicate()
             return True
         duplicates.add(key)
         return False

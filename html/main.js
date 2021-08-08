@@ -4,23 +4,21 @@ var search_finished = {};
 
 var RENDER_AS_GRID = localStorage.rendertype == 'grid';
 var TOP_HEIGHT = 250;
+var LEFT_MARGIN = 350;
 
-var ALPHA_WARMUP_COUNT = 1
 var ALPHA_INITIAL = 0.5
-var ALPHA_WARMUP = 0.05
-var ALPHA_SHAKE = 0.2
+var ALPHA_SHAKE = 0.05
 var ALPHA_DRAG = 0.01
 var ALPHA_DRAG_START = 0.01
-var ALPHA_SHAKE_INITIAL = 0.3
 
 var LINK_DISTANCE = 20
 var LINK_STRENGTH = 5
-var NODE_RADIUS = 60
+var NODE_RADIUS = 50
 var LINE_WIDTH_RATIO = 1.3
 
 var COLLIDE_ITERATIONS = 2
-var FORCE_CENTER_X = 0.6
-var FORCE_CENTER_Y = 1.9
+var FORCE_CENTER_X = 0.1
+var FORCE_CENTER_Y = 1.0
 var NODE_FONT_SIZE = 24
 var SPECIAL_NODE_FONT_SIZE = 28
 var IMAGE_SIZE_MINIMUM = 7
@@ -304,20 +302,33 @@ function update_summary(kind, graph) {
     size_selects();
 }
 
-function linkDistance(node) {
-    return LINK_DISTANCE;
+function linkDistance(link) {
+    const distance = LINK_DISTANCE
+    return isTimeLink(link) ? 2 * distance : distance;
 }
 
-function linkStrength(node) {
-    return LINK_STRENGTH;
+function isTimeLink(link) {
+    return (link.source.kind == 'time' || link.target.kind == 'time');
+}
+
+function linkStrength(link) {
+    return isTimeLink(link) ? 5 * LINK_STRENGTH : LINK_STRENGTH;
+}
+
+function linkColor(link) {
+    return isTimeLink(link) ? "#BBB" : link.color;
+}
+
+function linkWidth(link) {
+    return isTimeLink(link) ? 1 : 2;
 }
 
 function load_graph(kind, w, h) {
     var force = d3.forceSimulation()
             .force("link", d3.forceLink().distance(linkDistance).strength(linkStrength))
-            .force("x", d3.forceX(w / 2 - 96).strength(FORCE_CENTER_X))
+            .force("x", d3.forceX(w / 2 - 300).strength(FORCE_CENTER_X))
             .force("y", d3.forceY(h / 2).strength(FORCE_CENTER_Y))
-            .force("charge", d3.forceManyBody().strength(3))
+            .force("charge", d3.forceManyBody().strength(5))
             .alpha(ALPHA_INITIAL)
             .alphaDecay(0.1);
 
@@ -327,7 +338,7 @@ function load_graph(kind, w, h) {
         .style("cursor", "move")
         .call(zoom);
     var g = svg.append("g");
-    var current_zoom_scale = 0.9;
+    var current_zoom_scale = 7;
     zoom.scaleTo(svg, current_zoom_scale);
 
     function zoomed(a, b, c) {
@@ -345,8 +356,16 @@ function load_graph(kind, w, h) {
         zoom.scaleTo(svg, current_zoom_scale *= 0.7);
     });
 
+    console.log("Loading graph");
     graph_start = new Date().getTime();
     d3.json("graph?" + get_args(query, kind), function(error, graph) {
+        function getTimeNodes() {
+            return graph.nodes.filter(d => d.uid.startsWith("time-"))
+                .sort(function(d1, d2) {
+                    return d1.index - d2.index;
+                });
+        }
+
         graph_loaded = new Date().getTime();
         svg.attr("width", w - 2 * $('.logo').width() - 96)
            .attr("height", h + TOP_HEIGHT);
@@ -357,7 +376,8 @@ function load_graph(kind, w, h) {
         $('#dashboard-files').text('Files:' + (graph.stats.files || 0));
         update_summary(kind, graph);
 
-        zoom.scaleTo(svg, current_zoom_scale = Math.min(1, Math.min(w,h)/graph.nodes.length/15));
+        zoom.translateBy(svg, -LEFT_MARGIN, -TOP_HEIGHT);
+        zoom.scaleTo(svg, current_zoom_scale = Math.min(0.6, w/graph.nodes.length/37));
         force.alphaDecay(Math.max(0.05, graph.nodes.length/1000));
 
         svg.insert("rect", ":first-child")
@@ -371,14 +391,16 @@ function load_graph(kind, w, h) {
         var nodeById = {}
         d3.range(graph.nodes.length).forEach(function(index) { nodeById[index] = graph.nodes[index] });
 
-        graph.nodes.forEach(function(d) {
+        graph.nodes.forEach(function(d, index) {
             d.vx = 3;
-            d.vy = 0.1
-            if (d.uid.startsWith("time-")) {
-                d.fx = d.index * w/6 - w/3;
-                d.fy = h/2;
-            }
+            d.vy = 1;
         });
+        const timeNodes = getTimeNodes();
+        const timeSpace = Math.sqrt(Math.sqrt(Math.sqrt(graph.nodes.length))) * w / timeNodes.length;
+        timeNodes.forEach(function(d, index) {
+                d.fx = index * timeSpace;
+                d.fy = h/2 - 200 + 400 * (index % 2);
+            });
 
         function getId(d, type) {
             var label = d.label || '';
@@ -416,6 +438,7 @@ function load_graph(kind, w, h) {
                 .attr("y", function(d) { return -d.zoomed_icon_size/2; })
                 .attr("width", function(d) { return d.zoomed_icon_size; })
                 .attr("height", function(d) { return d.zoomed_icon_size; })
+            d3.select(this.parentNode).raise();
         }
 
         function zoomInLabel(d) {
@@ -483,14 +506,13 @@ function load_graph(kind, w, h) {
         }
 
         function dragged(d) {
-            d.fx = d3.event.x;
-            d.fy = d3.event.y;
+            d.fx = d.tx = d3.event.x;
+            d.fy = d.ty = d3.event.y;
             shake(ALPHA_DRAG);
         }
 
         function dragended(d) {
-            // d.fx = null;
-            // d.fy = null;
+            shake(ALPHA_DRAG);
         }
 
         force
@@ -503,8 +525,8 @@ function load_graph(kind, w, h) {
             .append("line")
             .attr("class", "link")
             .style("stroke-opacity", 0.25)
-            .style("stroke-width", 2)
-            .style("stroke", function(l) { return l.color; })
+            .style("stroke-width", linkWidth)
+            .style("stroke", linkColor)
 
         var node = g.selectAll(".node")
             .data(graph.nodes)
@@ -563,15 +585,20 @@ function load_graph(kind, w, h) {
             link.transition()
                 .duration(300)
                 .style('stroke-opacity', function(l) { return (d === l.source || d === l.target) ? 1 : 0.25 })
-                .style('stroke-width', function(l) { return (d === l.source || d === l.target) ? 4 : 2 })
-                .style('stroke', function(l) { return (d === l.source || d === l.target) ? '#666' : l.color });
+                .style('stroke-width', function(l) {
+                    if (d === l.source || d === l.target) {
+                        return 4;
+                    }
+                    return linkWidth(l);
+                })
+                .style('stroke', function(l) { return (d === l.source || d === l.target) ? '#666' : linkColor(l) });
         })
         node.on('mouseout', function(d) {
             link.transition()
                 .duration(1000)
                 .style('stroke-opacity', 0.25)
-                .style('stroke-width', 2)
-                .style("stroke", function(l) { return l.color; })
+                .style("stroke-width", linkWidth)
+                .style("stroke", linkColor)
         });
 
         node.append("text")
@@ -596,38 +623,15 @@ function load_graph(kind, w, h) {
         });
 
         force.on("tick", function() {
+            node.attr("transform", function (d) {
+                return "translate(" + d.x + "," + d.y + ")";
+            });
+
             link.attr("x1", function(d) { return d.source.x; })
                 .attr("y1", function(d) { return d.source.y; })
                 .attr("x2", function(d) { return d.target.x; })
                 .attr("y2", function(d) { return d.target.y; });
-
-            node.attr("transform", function (d) {
-                return "translate(" + d.x + "," + d.y + ")";
-            });
         });
-
-        function warmup() {
-            shake(ALPHA_SHAKE);
-            // setInitialZoomScale();
-        }
-
-        function setInitialZoomScale() {
-            var minX = 0,
-              maxX = w,
-              minY = 0,
-              maxY = h;
-            nodes.forEach(function(node) {
-              minX = Math.min(minX, node.x - node.radius);
-              maxX = Math.max(maxX, node.x + node.radius);
-              minY = Math.min(minY, node.y - node.radius);
-              maxY = Math.max(maxY, node.y + node.radius);
-            });
-            currentZoomScale = Math.min(
-              (w - 150) / (maxX - minX),
-              (h - 150) / (maxY - minY)
-            );
-            zoom.scaleTo(svg, currentZoomScale);
-          }
 
         function resize() {
             var width = $(window).width();
@@ -637,9 +641,7 @@ function load_graph(kind, w, h) {
             }
         }
 
-        resize();
         d3.select(window).on("resize", resize);
-        warmup();
         graph_rendered = new Date().getTime();
         console.log("GRAPH loaded", graph_loaded - graph_start)
         console.log("GRAPH rendered", graph_rendered - graph_start)

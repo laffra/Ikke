@@ -116,13 +116,10 @@ class CalendarNode(storage.Data):
                 return True
         return False
 
-    def get_related_items(self):
-        return []
-
     def is_duplicate(self, duplicates):
         key = "calendar - %s" % ' '.join(sorted(word for word in self.words if not stopwords.is_stopword(word)))
         if key in duplicates:
-            self.duplicate = True
+            self.mark_duplicate()
             return True
         duplicates.add(key)
         return False

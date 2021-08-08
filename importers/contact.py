@@ -45,7 +45,7 @@ def find_contact(email, name='', phones=None, timestamp=None):
             'label': name,
             'words': stopwords.remove_stopwords(name),
             'names': [name] if name else [],
-            'timestamp': timestamp or time.time(),
+            'timestamp': timestamp,
             'phones': phones or [],
         })
         logging.debug('CONTACT: new contact ==> %s %s' % (email, contact.names))
@@ -54,7 +54,6 @@ def find_contact(email, name='', phones=None, timestamp=None):
         contact.names.append(name)
         save_queue.add(contact)
     contacts_cache[email] = contact
-    contact.timestamp = timestamp
     return contact
 
 
@@ -77,7 +76,7 @@ class Contact(storage.Data):
         self.label = self.name
         self.color = 'purple'
         self.font_size = 14
-        self.timestamp = obj.get('timestamp', time.time())
+        self.timestamp = obj.get('timestamp', 0)
         dict.update(self, vars(self))
 
     @classmethod
@@ -93,7 +92,7 @@ class Contact(storage.Data):
 
     def is_duplicate(self, duplicates):
         if self.email in duplicates:
-            self.duplicate = True
+            self.mark_duplicate()
             return True
         duplicates.add(self.email)
         return False
@@ -150,6 +149,9 @@ def cleanup():
         contact.save()
     save_queue.clear()
 
+
+def render(args):
+    return ""
 
 if __name__ == '__main__':
     import os

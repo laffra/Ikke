@@ -1,3 +1,4 @@
+import datetime
 from storage import Storage
 
 from importers import browser
@@ -233,7 +234,8 @@ class Server(BaseHTTPRequestHandler):
             self.args.get('title', ''),
             self.args.get('image', ''),
             self.args.get('favicon', ''),
-            self.args.get('selection', '')
+            self.args.get('selection', ''),
+            float(self.args.get('timestamp', datetime.datetime.utcnow().timestamp()))
         )
         self.respond('OK')
 

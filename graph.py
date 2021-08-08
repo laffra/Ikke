@@ -1,6 +1,7 @@
 import datetime
 from collections import defaultdict
 import logging
+from random import random
 from re import I
 from urllib.parse import unquote
 import json
@@ -13,7 +14,7 @@ from preferences import ChromePreferences
 import os
 import utils
 from threadpool import ThreadPool
-from storage import Data, Storage
+from storage import Storage
 
 days = {
     'day': 1,
@@ -36,8 +37,6 @@ REDUCE_GRAPH_SIZE = False
 
 IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'tiff', 'png', 'raw']
 
-TIME_COUNT = 7
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -50,6 +49,7 @@ class Graph:
         self.search_count = {}
         self.search_results = defaultdict(list)
         self.search_duration = defaultdict(list)
+        self.time_nodes = set()
         self.my_pool = ThreadPool(1, [
             (self.search, days[duration_string])
         ])
@@ -94,6 +94,8 @@ class Graph:
                 tail = item.label[-cutoff:] 
                 item.label = "%s...%s" % (head, tail)
             item.date = str(datetime.datetime.fromtimestamp(float(item.timestamp))) if item.timestamp else ""
+            item.x = random() * 500
+            item.y = random() * 500
 
         nodes_index = dict((item.uid, n) for n, item in enumerate(items))
         label_index = dict((item.label, n) for n, item in enumerate(items))
@@ -111,56 +113,9 @@ class Graph:
             if item1 and item1.uid in nodes_index and item2 and item2.uid in nodes_index
         ]
 
-        timestamps = [item["timestamp"] for item in items if item["timestamp"]]
-        if timestamps:
-            min_timestamp = min(timestamps)
-            max_timestamp = max(timestamps)
-            time_increment = (max_timestamp - min_timestamp) / TIME_COUNT 
-            most_recent = datetime.datetime.fromtimestamp(max_timestamp)
-
-            print("### min:", datetime.datetime.fromtimestamp(min_timestamp))
-            print("### max:", datetime.datetime.fromtimestamp(max_timestamp))
-
-            def time_label(time_ms):
-                timestamp = min_timestamp + time_ms
-                then = datetime.datetime.fromtimestamp(timestamp)
-                diff = most_recent - then
-                if self.duration_string == "day":
-                    hours = int(diff.seconds / 3600)
-                    if hours:
-                        return "%d hour%s ago" % (hours, "s" if hours > 1 else "")
-                else:
-                    if diff.days:
-                        return "%d day%s ago" % (diff.days, "s" if diff.days > 1 else "")
-                if diff.seconds:
-                    return "recently"
-                return "now"
-
-            times = [
-                TimeNode(n, time_label(n * time_increment))
-                for n in range(TIME_COUNT)
-            ]
-
-            def time_index(item):
-                if time_increment:
-                    index = int((item["timestamp"] - min_timestamp) / time_increment)
-                    return min(TIME_COUNT -1, max(0, index))
-                return 0
-
-            for n in range(3):
-                links += [
-                    {
-                        'source': nodes_index[item.uid],
-                        'target': len(nodes_index) + time_index(item),
-                        'color': "#EEE",
-                        'stroke': 1,
-                    }
-                    for item in items
-                    if item["timestamp"] and item['kind'] != 'contact'
-                ]
-            nodes += times
-                        
         logger.info("Found %d nodes" % len(nodes))
+        for node in nodes:
+            logger.info("  %s" % node["kind"])
         logger.info("Found %d links" % len(links))
 
         stats = {
@@ -183,7 +138,7 @@ class Graph:
             'directed': False,
             'stats': stats
         }
-
+    
     def remove_labels(self, items):
         return [item for item in items if item.kind != 'label']
 
@@ -205,17 +160,3 @@ class Graph:
 
     def is_lonely_label(self, item):
         return item.kind == "label" and item.edges == 0
-
-
-class TimeNode(Data):
-    def __init__(self, index, label):
-        super(TimeNode, self).__init__(label)
-        self.uid = "time-%d" % index
-        self.index = index
-        self.kind = 'time'
-        self.color = 'purple'
-        self.icon_size = 12
-        self.zoomed_icon_size = 24
-        self.font_size = 10
-        self.icon = 'get?path=icons/time-icon.png'
-        dict.update(self, vars(self))

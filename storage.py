@@ -1,4 +1,5 @@
 import datetime
+from threading import TIMEOUT_MAX
 import elasticsearch
 from importlib import import_module
 import json
@@ -27,6 +28,13 @@ class Storage:
     elastic_client = elasticsearch.Elasticsearch([{'host': 'localhost', 'port': '9200'}])
     elastic_logger = logging.getLogger('elasticsearch')
     elastic_logger.setLevel(logging.WARNING)
+
+    @classmethod
+    def get_data(cls, index, id):
+        try:
+            return cls.elastic_client.get(index=index, id=id)
+        except:
+            return None
 
     @classmethod
     def add_data(cls, data):
@@ -358,11 +366,12 @@ class Data(dict):
         self.font_size = 0
         self.border = 'none'
         self.zoomed_icon_size = 0
+        self.duplicate_count = 0
         self.image = ''
         self.words = []
         self.timestamp = 0
-        self.duplicate = False
         self.edges = 0
+        self.timenode = None
 
         dict.update(self, vars(self))
         if obj:
@@ -374,10 +383,11 @@ class Data(dict):
         return hash(self.uid)
 
     def is_related_item(self, other):
-        return False
+        return other is self.timenode
 
     def get_related_items(self):
-        return []
+        self.timenode = TimeNode.get_timenode(self.timestamp)
+        return list(filter(None, [ self.timenode ]))
 
     def __eq__(self, other):
         return isinstance(other, self.__class__) and self.uid == other.uid
@@ -391,12 +401,74 @@ class Data(dict):
     def is_duplicate(self, duplicates):
         return False
 
+    def mark_duplicate(self):
+        self.duplicate_count += 1
+        print("DUPLICATE", self, self.duplicate_count)
+
     def save(self):
         Storage.stats['writes'] += 1
         Storage.add_data(self)
 
     def __repr__(self):
         return "<%s %s %s>" % (self.__class__.__name__.replace("Node", ""), repr(self.uid), repr(self.label))
+
+
+class TimeNode(Data):
+    TIME_COUNT = 7
+    min_timestamp = 0
+    max_timestamp = 0
+    timenodes = [None] * TIME_COUNT
+
+    def __init__(self, index, timestamp):
+        super(TimeNode, self).__init__("")
+        self.uid = "time-%d" % index
+        self.kind = 'time'
+        self.color = 'darkgreen'
+        self.icon_size = 27
+        self.zoomed_icon_size = 42
+        self.font_size = 10
+        self.index = index
+        self.timestamp = timestamp
+        self.label = self.get_label(timestamp)
+        self.icon = 'get?path=icons/rainbow-circle.png'
+        dict.update(self, vars(self))
+    
+    def __hash__(self):
+        return self.label.__hash__()
+
+    def __eq__(self, other):
+        return isinstance(other, TimeNode) and other.index == self.index
+
+    def get_related_items(self):
+        return []
+
+    def get_label(self, timestamp):
+        last = datetime.datetime.fromtimestamp(self.max_timestamp)
+        then = datetime.datetime.fromtimestamp(timestamp)
+        diff = last - then
+        if diff.days:
+            return "%s day%s ago" % (diff.days, "s" if diff.days > 1 else "")
+        hours = int(diff.seconds / 3600)
+        return "%s hour%s ago" % (hours, "s" if hours > 1 else "")
+    
+    @classmethod
+    def set_timerange(cls, min_timestamp, max_timestamp):
+        cls.min_timestamp = min_timestamp
+        cls.max_timestamp = max_timestamp
+
+    @classmethod
+    def get_timenode(cls, timestamp):
+        range = cls.max_timestamp - cls.min_timestamp
+        increment = range / cls.TIME_COUNT
+        if not timestamp or not increment:
+            return None
+        diff = timestamp - cls.min_timestamp
+        index = max(0, min(int(diff / increment), cls.TIME_COUNT - 1))
+        print(index, range/3600000, increment/3600000, diff/3600000)
+        if not cls.timenodes[index]:
+            timestamp = int(cls.min_timestamp + index * increment)
+            cls.timenodes[index] = TimeNode(index, timestamp)
+        return cls.timenodes[index]
 
 
 item_handlers.update({

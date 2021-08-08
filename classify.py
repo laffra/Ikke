@@ -61,6 +61,9 @@ def adjacent(items):
 
 def get_item_edges(items):
     # type(list, str) -> list
+    timestamps = [item.timestamp for item in items if item.timestamp]
+    if timestamps:
+        storage.TimeNode.set_timerange(min(timestamps), max(timestamps))
     return {
         (item, related)
         for item in items
@@ -71,12 +74,8 @@ def get_item_edges(items):
 def remove_duplicates(items, keep_duplicates):
     # type(list, bool) -> list
     duplicates = set()
-    logger.debug("################## %d emails" % len(list(filter(lambda n: n["kind"] == "gmail", items))))
-    for item in items:
-        if item.kind == "gmail":
-            logger.debug('%s - %s' % (item.uid, item.subject))
-    results = [item for item in items if keep_duplicates or not item.is_duplicate(duplicates)]
-    logger.debug('Found %d duplicates, duplicates=%s', len(items) - len(results), duplicates)
+    sorted_items = sorted(items, key=lambda item: -(item.timestamp or 0))
+    results = [item for item in sorted_items if keep_duplicates or not item.is_duplicate(duplicates)]
     if len(results) > storage.MAX_NUMBER_OF_ITEMS:
         too_much = TooMuch(len(results) - storage.MAX_NUMBER_OF_ITEMS)
         results = results[:storage.MAX_NUMBER_OF_ITEMS]
@@ -145,6 +144,7 @@ def debug_results(labels, items):
             for var in vars(item):
                 logging.debug('       %s: %s' % (var, shorten(getattr(item, var))))
     logging.set_level(level)
+
 
 
 if __name__ == '__main__':

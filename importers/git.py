@@ -89,7 +89,7 @@ class GitCommit(storage.Data):
         return GitCommit(obj)
 
     def get_related_items(self):
-        return [ Project(self.project[0]) ]
+        return super().get_related_items() + [ Project(self.project[0]) ]
 
     def render(self, query):
         return '<script>window.alert(\'%s\');</script>' % self.label

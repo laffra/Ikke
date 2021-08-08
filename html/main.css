@@ -236,8 +236,7 @@ td {
 .ui-tabs .ui-tabs-panel {
     padding: 0.1em 0.1em;
     border: 0px solid #AAA;
-    height: 100%;
-    min-height: 1000px;
+    height: calc(100% - 100);
 }
 
 .link-header a {
@@ -304,6 +303,10 @@ td {
 
 .summary a:hover {
     text-decoration: underline;
+}
+
+#ikke-search-email {
+    opacity: 0;
 }
 
 .search-button {

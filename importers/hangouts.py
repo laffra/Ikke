@@ -11,7 +11,7 @@ def deserialize(obj):
     return HangoutNode(obj)
 
 def get_status():
-    return Importer.get_status("hangouts", "messages")
+    return Importer.get_status("hangouts", "message")
 
 
 def delete_all():
@@ -44,9 +44,6 @@ class HangoutNode(gmail.GMailNode):
 
     def is_related_item(self, other):
         return False
-
-    def get_related_items(self):
-        return []
 
     def render(self, query):
         return '<script>window.alert(\'%s\');</script>' % self.label
