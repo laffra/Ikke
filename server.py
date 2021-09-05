@@ -1,7 +1,10 @@
 import datetime
+import re
+from stopwords import is_stopword, remove_stopwords
 from storage import Storage
+import pubsub
 
-from importers import browser
+from importers import INITIAL_DAYS_LOAD, browser
 from importers import contact
 from importers import download
 from importers import file
@@ -15,7 +18,7 @@ from settings import settings
 from http.server import BaseHTTPRequestHandler
 from http.server import HTTPServer
 from socketserver import ThreadingMixIn
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlparse
 from urllib.request import urlopen
 import jinja2
 import json
@@ -49,13 +52,15 @@ class Server(BaseHTTPRequestHandler):
             '/status': self.status,
             '/load': self.load,
             '/stopload': self.stop_loading,
-            '/save_image': self.save_image,
+            '/save_page_details': self.save_page_details,
             '/extensions': self.extensions,
             '/get': self.get_resource,
             '/get_image': self.get_image,
             '/render': self.render,
             '/open': self.open_local,
             '/settings': self.settings,
+            '/settings_set': self.settings_set,
+            '/settings_get': self.settings_get,
             '/projects': self.projects,
             '/jquery.js': self.get_jquery,
             '/search': self.search,
@@ -90,6 +95,15 @@ class Server(BaseHTTPRequestHandler):
             'can_delete': { kind: Storage.can_delete(kind) for kind in graph.ALL_ITEM_KINDS[1:]},
         })
         self.respond(html)
+
+    def settings_set(self):
+        key = self.args["key"]
+        value = self.args["value"]
+        settings[key] = value
+        self.respond("Ikke settings: set %s to '%s'" % (key, value))
+
+    def settings_get(self):
+        self.respond(settings[self.args["key"]])
 
     def projects(self):
         data = [
@@ -228,16 +242,37 @@ class Server(BaseHTTPRequestHandler):
         logger.info("Open %s" % path)
         subprocess.call(['open', path])
 
-    def save_image(self):
+    def save_page_details(self):
         browser.save_image(
             self.args.get('url', ''),
             self.args.get('title', ''),
             self.args.get('image', ''),
             self.args.get('favicon', ''),
             self.args.get('selection', ''),
+            self.args.get('essence', ''),
+            self.args.get('keywords', ''),
             float(self.args.get('timestamp', datetime.datetime.utcnow().timestamp()))
         )
+        self.notify_related()
         self.respond('OK')
+
+    def notify_related(self):
+        query = re.sub("[^A-Za-z_0-9]", " ", self.args.get('essence', self.args.get('title', '')))
+        words = [word for word in query.split() if not is_stopword(word)]
+        query = " ".join(words)
+        days_to_search = 365
+        results = Storage.search(query, days_to_search)
+        if not results:
+            for word in words:
+                results += Storage.search(word, days_to_search)
+        results = filter(lambda result: result.kind != "time", results)
+        results = sorted(results, key=lambda result: -result.timestamp)
+        logger.info("Found %d related results" % len(results))
+        from classify import remove_duplicates
+        results = remove_duplicates(results, False)
+        results = results[:30]
+        results = sorted(results, key=lambda result: result.kind, reverse=True)
+        pubsub.notify("related", query, results)
 
     def get_file(self):
         try:
@@ -264,36 +299,30 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     """Handle requests in a separate thread."""
 
 
-def test():
-    from importers import calendar
-    calendar.Calendar.load(8, 7)
+def runServerInBackground(server):
+    poller.start()
+    server.serve_forever()
+    poller.stop()
+    for kind in graph.ALL_ITEM_KINDS[1:]:
+        Storage.stop_loading(kind)
 
-def run():
+def startServer(handleRelated):
     logging.basicConfig(level=logging.INFO)
     installer.install()
     port = settings.get('port', PORT_NUMBER)
     threaded_server = ThreadedHTTPServer(('localhost', port), Server)
+    threaded_server.handleRelated = handleRelated
 
-    poller.start()
-
-    url = 'http://localhost:%d/settings' % port
-    url = 'http://localhost:%d' % port
-
-    import webbrowser
-    webbrowser.open(url, autoraise=False)
     settings['port'] = port
     if settings['browser/count'] < 100:
         threading.Thread(target=lambda: Storage.load('browser')).start()
-    try:
-        threaded_server.serve_forever()
-    finally:
-        poller.stop()
-        for kind in graph.ALL_ITEM_KINDS[1:]:
-            Storage.stop_loading(kind)
+    threading.Thread(target=lambda: runServerInBackground(threaded_server)).start()
 
 if __name__ == '__main__':
     if "clear" in sys.argv:
         print("Clearing...")
         settings.clear()
     else:
-        run()
+        def handleRelated(query, relatedItems):
+            print("Related:", query, len(relatedItems))
+        startServer(handleRelated)

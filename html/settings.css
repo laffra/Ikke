@@ -146,3 +146,21 @@ span.name {
     padding-top: 15px;
     display: none;
 }
+
+.settings-row {
+    display: flex;
+    align-items: center;
+}
+
+.settings-row input[type='checkbox'] {
+    width: 19px;
+    height: 19px;
+}
+
+.settings-row label {
+    font-family: Arial;
+    font-size: 14px;
+    display: inline;
+    margin-left: 4px;
+    margin-top: 2px;
+}

@@ -116,8 +116,8 @@ settings['git/paths'] = [
 deserialize = GitCommit.deserialize
 
 def load_repo(path):
-    logger.info("#"*80)
-    logger.info(path)
+    logger.debug("#"*80)
+    logger.debug(path)
     repository = pydriller.Git(path)
     url = repository.repo.remotes[0].config_reader.get("url")
     for commit in repository.get_list_commits():
@@ -145,6 +145,6 @@ def load_repo(path):
                 for modification in commit.modified_files
             ],
         }
-        logger.info("Add %s" % json.dumps(obj))
+        logger.debug("Add %s" % json.dumps(obj))
         storage.Storage.add_data(obj)
 

@@ -302,7 +302,7 @@ def _render(args):
 
 def render(args):
     import re
-    words = args["query"].split() + list(filter(lambda word: re.match("^[a-zA-Z]*$", word), args["subject"].split()))[:10]
+    words = args.get("query", "").split() + list(filter(lambda word: re.match("^[a-zA-Z]*$", word), args["subject"].split()))[:10]
     logger.info(args["subject"])
     logger.info(words)
     url = 'https://mail.google.com/mail/u/0/#search/%s' % urllib.parse.quote(' '.join(words))

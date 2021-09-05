@@ -113,10 +113,10 @@ class Graph:
             if item1 and item1.uid in nodes_index and item2 and item2.uid in nodes_index
         ]
 
-        logger.info("Found %d nodes" % len(nodes))
+        logger.debug("Found %d nodes" % len(nodes))
         for node in nodes:
-            logger.info("  %s" % node["kind"])
-        logger.info("Found %d links" % len(links))
+            logger.debug("  %s" % node["kind"])
+        logger.debug("Found %d links" % len(links))
 
         stats = {
             'found': len(found_items),

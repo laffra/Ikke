@@ -77,7 +77,7 @@ def get_favicon(url):
     return '%s://%s/favicon.ico' % (url.scheme, url.netloc)
 
 
-def save_image(url, title, image, favicon, selection, timestamp=0, force=False):
+def save_image(url, title, image, favicon, selection, essence, keywords, timestamp=0, force=False):
     if is_meta_site(url):
         return
     domain = urlparse(url).netloc
@@ -100,6 +100,8 @@ def save_image(url, title, image, favicon, selection, timestamp=0, force=False):
         'image': image,
         'icon': favicon,
         'selection': selection,
+        'essence': essence,
+        'keywords': keywords,
         'title': title,
         'timestamp': timestamp,
     })
@@ -173,8 +175,9 @@ class BrowserNode(storage.Data):
         self.kind = 'browser'
         self.uid = obj['uid']
         self.image = obj.get('image','')
+        self.essence = obj.get('essence','')
+        self.keywords = obj.get('keywords','')
         self.url = obj.get('url', '')
-        print("UID:", obj["uid"])
         self.domain, self.title = obj['uid'].split('#')
         self.timestamp = float(obj.get('timestamp', '0'))
         self.label = self.domain

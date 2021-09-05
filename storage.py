@@ -5,6 +5,7 @@ from importlib import import_module
 import json
 import logging
 import os
+import pubsub
 from settings import settings
 import shutil
 import stat
@@ -55,7 +56,8 @@ class Storage:
 
     @classmethod
     def search(cls, query, days=0):
-        # type: (str,int,str) -> list
+        pubsub.notify("search", query, days)
+        # type: (str,int) -> list
         assert isinstance(query, str)
         assert isinstance(days, int), 'unexpected type %s: %s' % (type(days), days)
         cls.stats = defaultdict(int)
@@ -403,7 +405,6 @@ class Data(dict):
 
     def mark_duplicate(self):
         self.duplicate_count += 1
-        print("DUPLICATE", self, self.duplicate_count)
 
     def save(self):
         Storage.stats['writes'] += 1
@@ -464,7 +465,6 @@ class TimeNode(Data):
             return None
         diff = timestamp - cls.min_timestamp
         index = max(0, min(int(diff / increment), cls.TIME_COUNT - 1))
-        print(index, range/3600000, increment/3600000, diff/3600000)
         if not cls.timenodes[index]:
             timestamp = int(cls.min_timestamp + index * increment)
             cls.timenodes[index] = TimeNode(index, timestamp)

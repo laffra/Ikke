@@ -1,3 +1,4 @@
+python3 -m pip install --upgrade rumps
 python3 -m pip install --upgrade jinja2
 python3 -m pip install --upgrade dateparser
 python3 -m pip install --upgrade psutil

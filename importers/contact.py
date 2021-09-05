@@ -75,6 +75,7 @@ class Contact(storage.Data):
         self.name = self.name or self.label or self.email
         self.label = self.name
         self.color = 'purple'
+        self.icon = 'get?path=icons/person-icon.png'
         self.font_size = 14
         self.timestamp = obj.get('timestamp', 0)
         dict.update(self, vars(self))

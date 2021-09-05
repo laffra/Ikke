@@ -396,7 +396,7 @@ function load_graph(kind, w, h) {
             d.vy = 1;
         });
         const timeNodes = getTimeNodes();
-        const timeSpace = Math.sqrt(Math.sqrt(Math.sqrt(graph.nodes.length))) * w / timeNodes.length;
+        const timeSpace = w / timeNodes.length;
         timeNodes.forEach(function(d, index) {
                 d.fx = index * timeSpace;
                 d.fy = h/2 - 200 + 400 * (index % 2);

@@ -103,15 +103,13 @@ def write(path, format, data):
 
 
 def render(args):
-    path = os.path.join(utils.FILE_DIR, args["uid"], args["filename"])
+    path = os.path.join(utils.FILE_DIR, args["uid"])
     return '''
-        <button onclick="loadFile()">open file</button>
         <script>
-            function loadFile() {
-                var xhttp = new XMLHttpRequest();
-                xhttp.open("GET", "/open?path=%s", true);
-                xhttp.send();
-            }
+            var xhttp = new XMLHttpRequest();
+            xhttp.open("GET", "/open?path=%s", true);
+            xhttp.send();
+            setTimeout(window.close, 1000);
         </script>
         ''' % urllib.parse.quote(path)
 

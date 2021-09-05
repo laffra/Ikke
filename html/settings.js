@@ -68,9 +68,45 @@ $('.stop-clear-button').click(function() {
     $.get('/stopclear?kind=' + kind)
         .fail(function(error) {
             $('#history-' + kind).text('Could not stop deleting, ' + error);
-        }
-    );
+        });
 });
+
+$('#settings-debug-browser-extension').on('change', function () {
+    $.get('/settings_set?key=debug-browser-extension&value=' + $(this).is(":checked"))
+        .done(function(result) {
+            console.log(result);
+        })
+        .fail(function(error) {
+            alert(error);
+        });
+});
+
+$.get('/settings_get?key=debug-browser-extension')
+    .done(function(result) {
+        $('#settings-debug-browser-extension').prop('checked', result == "true");
+    })
+    .fail(function(error) {
+        alert(error);
+    });
+
+$('#settings-show-ikke-dot').on('change', function () {
+    console.log("dot?", $(this).is(":checked"));
+    $.get('/settings_set?key=show-ikke-dot&value=' + $(this).is(":checked"))
+        .done(function(result) {
+            console.log("dot?", $(this).is(":checked"), result);
+        })
+        .fail(function(error) {
+            alert(error);
+        });
+});
+
+$.get('/settings_get?key=show-ikke-dot')
+    .done(function(result) {
+        $('#settings-show-ikke-dot').prop('checked', result == "true");
+    })
+    .fail(function(error) {
+        alert(error);
+    });
 
 function setup_extension() {
     window.open("http://chrislaffra.com/ikke/extension.html", '_blank');
