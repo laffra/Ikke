@@ -9,8 +9,10 @@ import pubsub
 from settings import settings
 import shutil
 import stat
+import subprocess
 import utils
 import time
+import sys
 from collections import defaultdict
 
 ITEM_KINDS = [ 'contact', 'gmail', 'hangouts', 'calendar', 'git', 'browser', 'file' ]
@@ -27,13 +29,11 @@ item_handlers = { }
 class Storage:
     stats = defaultdict(int)
     elastic_client = elasticsearch.Elasticsearch([{'host': 'localhost', 'port': '9200'}])
-    elastic_logger = logging.getLogger('elasticsearch')
-    elastic_logger.setLevel(logging.WARNING)
 
     @classmethod
-    def get_data(cls, index, id):
+    def get_data(cls, index, data_id):
         try:
-            return cls.elastic_client.get(index=index, id=id)
+            return cls.elastic_client.get(index=index, id=data_id)
         except:
             return None
 
@@ -57,7 +57,6 @@ class Storage:
     @classmethod
     def search(cls, query, days=0):
         pubsub.notify("search", query, days)
-        # type: (str,int) -> list
         assert isinstance(query, str)
         assert isinstance(days, int), 'unexpected type %s: %s' % (type(days), days)
         cls.stats = defaultdict(int)
@@ -241,6 +240,13 @@ class Storage:
         if not os.path.exists(utils.HOME_DIR):
             os.mkdir(utils.HOME_DIR)
             os.chmod(utils.HOME_DIR, stat.S_IEXEC)
+        try:
+            logging.getLogger('elasticsearch').setLevel(logging.WARNING)
+            os.environ["ES_PATH_CONF"] = os.path.join(os.getcwd(), "elasticsearch")
+            logger.info("Start ElasticSearch using settings from %s", os.environ["ES_PATH_CONF"])
+            subprocess.Popen("elasticsearch")
+        except:
+            logger.error("Cannot run elastic server")
 
     @classmethod
     def get_item_count(cls, kind):
@@ -388,8 +394,9 @@ class Data(dict):
         return other is self.timenode
 
     def get_related_items(self):
-        self.timenode = TimeNode.get_timenode(self.timestamp)
-        return list(filter(None, [ self.timenode ]))
+        # self.timenode = TimeNode.get_timenode(self.timestamp)
+        # return list(filter(None, [ self.timenode ]))
+        return []
 
     def __eq__(self, other):
         return isinstance(other, self.__class__) and self.uid == other.uid
@@ -447,7 +454,11 @@ class TimeNode(Data):
         last = datetime.datetime.fromtimestamp(self.max_timestamp)
         then = datetime.datetime.fromtimestamp(timestamp)
         diff = last - then
+        if diff.days > 7:
+            weeks = round(diff.days / 7)
+            return "%d week%s ago" % (weeks, "s" if weeks > 1 else "")
         if diff.days:
+            logger.info("TimeNode %s %s %s %s", timestamp, diff.days, last, then)
             return "%s day%s ago" % (diff.days, "s" if diff.days > 1 else "")
         hours = int(diff.seconds / 3600)
         return "%s hour%s ago" % (hours, "s" if hours > 1 else "")
@@ -465,9 +476,10 @@ class TimeNode(Data):
             return None
         diff = timestamp - cls.min_timestamp
         index = max(0, min(int(diff / increment), cls.TIME_COUNT - 1))
+        timestamp = int(cls.min_timestamp + index * increment)
         if not cls.timenodes[index]:
-            timestamp = int(cls.min_timestamp + index * increment)
             cls.timenodes[index] = TimeNode(index, timestamp)
+        cls.timenodes[index].timestamp = timestamp
         return cls.timenodes[index]
 
 
