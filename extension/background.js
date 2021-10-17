@@ -11,37 +11,25 @@ chrome.identity.getProfileUserInfo(function(info) {
 
 chrome.extension.onMessage.addListener(function(request, sender, sendResponse) {
     if (request.kind == "ikke-email") {
-        sendResponse({email: email})
+        sendResponse({email: email});
     }
 });
 
 function call(url, handler) {
     var xhr = new XMLHttpRequest();
     xhr.open("GET", url, true);
-    if (handler) {
-        xhr.addEventListener("load", function() {
-            handler(this.responseText);
-        });
-    }
-    xhr.send()
-}
-
-function send(url, data, handler) {
-    var xhr = new XMLHttpRequest();
-    xhr.open("POST", url, true);
-    if (handler) {
-        xhr.addEventListener("load", function() {
-            handler(this.responseText);
-        });
-    }
-    xhr.send(data)
+    xhr.addEventListener("load", function() {
+        handler(this.responseText);
+    });
+    xhr.send();
 }
 
 chrome.runtime.onMessage.addListener(
     function(request, sender, sendResponse) {
+        if (!sender.tab.active) return;
         switch (request.type) {
-            case 'save_page_details':
-                call('http://localhost:1964/save_page_details' +
+            case 'get-related-items':
+                call('http://localhost:1964/get_related_items' +
                     '?url=' + encodeURIComponent(request.url) +
                     '&title=' + encodeURIComponent(request.title) +
                     '&essence=' + encodeURIComponent(request.essence) +
@@ -49,25 +37,9 @@ chrome.runtime.onMessage.addListener(
                     '&image=' + encodeURIComponent(request.image) +
                     '&selection=' + encodeURIComponent(request.selection) +
                     '&favicon=' + encodeURIComponent(request.favicon) +
-                    '&keywords=' + encodeURIComponent(request.keywords || ''));
-                break;
-            case 'get_dot_position':
-                call('http://localhost:1964/settings_get?key=dot_position_' +
-                        encodeURIComponent(request.domain), function(position) {
-                    sendResponse(position ? JSON.parse(position) : { right: 5, top: 5 });
-                });
-                break;
-            case 'set_dot_position':
-                call('http://localhost:1964/settings_set?key=dot_position_' +
-                        encodeURIComponent(request.domain) +
-                        '&value=' + JSON.stringify(request), function(position) {
-                    sendMessage({
-                        type: "update_dot_position",
-                        domain: request.domain,
-                        right: request.right,
-                        top: request.top
+                    '&keywords=' + encodeURIComponent(request.keywords || ''), function(response) {
+                        sendResponse(JSON.parse(response));
                     });
-                });
                 break;
         }
         return true;
@@ -80,7 +52,7 @@ function syncSetting(key) {
             settings[key] = response;
             sendMessage({ type: key, value: settings[key] });
         }
-    });
+    }, true);
 }
 
 setInterval(function() {
@@ -92,7 +64,10 @@ setInterval(function() {
 function sendMessage(data) {
     chrome.tabs.query({}, function(tabs) {
         for (tab of tabs) {
-            chrome.tabs.sendMessage(tab.id, data);
+            console.log("send", tab.id, data.kind);
+            chrome.tabs.sendMessage(tab.id, data, function(response) {
+                console.log(tab.id, response);
+            });
         } 
     });
 }
@@ -102,9 +77,18 @@ function notifyTabs(activeInfo) {
         for (key in settings) {
             sendMessage({ type: key, value: settings[key] });
         }
-        sendMessage({ type: "tab_changed" });
+        sendMessage({ type: "tab-changed" });
     }, 100);
 }
 
-chrome.tabs.onUpdated.addListener(notifyTabs);
+chrome.tabs.onUpdated.addListener(function(tabId) { notifyTabs({ tabId })});
 chrome.tabs.onActivated.addListener(notifyTabs);
+
+chrome.contextMenus.create({
+    title: "Search Ikke for \"%s\"",
+    contexts: ["selection"], 
+    onclick: function(info, tab) {
+        console.log("search ikke", info);
+        window.open('http://localhost:1964/?q=' + info.selectionText);
+    },
+});

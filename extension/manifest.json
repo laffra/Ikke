@@ -12,13 +12,18 @@
    "description": "Ikke",
    "manifest_version": 2,
    "name": "Ikke",
+   "icons": {
+      "16": "octopus.jpg",
+      "48": "octopus.jpg",
+      "128": "octopus.jpg"
+   },
    "page_action": {
       "default_icon": {
          "38": "octopus.jpg"
       },
       "default_title": "Ikke"
    },
-   "permissions": [ "tabs", "http://*/", "https://*/", "identity", "identity.email" ],
+   "permissions": [ "tabs", "http://*/", "https://*/", "contextMenus", "identity", "identity.email" ],
    "short_name": "Ikke",
    "update_url": "https://clients2.google.com/service/update2/crx",
    "version": "1.8"

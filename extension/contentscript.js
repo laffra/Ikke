@@ -1,14 +1,22 @@
 var myEmail = "";
 var lastDataSent = "";
 var essence;
+var dot;
 var essenceUrl;
+var related = {
+    query: "",
+    items: []
+};
+var menuOpen = false;
+var body = $("body");
 
 var DEBUG = false;
 var SHOW_DOT = false;
 
 const MULTIPLIER_TOP_SCORE = 2.0;
+const MULTIPLIER_CENTER_SCORE = 2.0;
+const MULTIPLIER_WIDTH_SCORE = 3.0;
 const MULTIPLIER_FONT_SCORE = 2.0;
-const MULTIPLIER_CENTER_SCORE = 1.0;
 
 const MINIMUM_OPACITY_VISIBLE = 0.5
 const MINIMUM_NODE_WIDTH_VISIBLE = 10;
@@ -19,6 +27,41 @@ const NOMINAL_PAGE_HEIGHT = 1000.0
 const DOCUMENT_CENTER = 0.4;
 
 const PAGE_SAVER_TIMEOUT_MS = 100;
+
+const IKKE_URL = "http://localhost:1964/";
+
+const DOT_SIZE = 22;
+const DOT_BORDER_RADIUS = 13;
+const DOT_SHADOW = "rgb(181 181 181) 0px 0px 9px 0px";
+const DOT_COLOR = "#333";
+const DOT_FONT_NAME = "Arial";
+const DOT_FONT_SIZE = 10;
+
+const MENU_WIDTH = 240;
+const MENU_LEFT_PADDING = 5;
+const MENU_TOP_PADDING = 3;
+const MENU_PADDING = "3px 5px";
+const MENU_BORDER_RADIUS = 7;
+const MENU_COLOR = "rgb(218 221 225 / 95%)";
+const MENU_FONT_NAME = "Arial";
+const MENU_FONT_SIZE = 10;
+const MENU_FONT_COLOR = "black";
+const MENU_ICON_SIZE = 12;
+const MENU_ITEM_HEIGHT = 14;
+const MENU_ICON_PADDING = 5;
+const MENU_ITEM_PADDING = "1px 5px"
+
+const MENU_ITEM_BACKGROUND_COLOR = "transparent";
+const MENU_ITEM_COLOR = "black";
+const MENU_ITEM_BACKGROUND_COLOR_HOVER = "rgb(10, 132, 255)";
+const MENU_ITEM_COLOR_HOVER = "white";
+
+const MENU_HEADER_EXTRA_LINK_COUNT = 1;
+const MENU_HEADER_ITEM_COUNT = 3;
+
+const ANIMATION_SPEED_BACKGROUND = 200;
+const ANIMATION_SPEED_MENU_OPEN = 100;
+const ANIMATION_SPEED_MENU_CLOSE = 100;
 
 var PAGE_SAVER_IGNORE = false;
 
@@ -91,37 +134,81 @@ function getTopScore(node) {
 
 function getCenterScore(node) {
     const documentCenter = $(window).width() * DOCUMENT_CENTER;
-    const nodeCenter = node.offset().left;
+    const nodeLeft = node.offset().left;
+    if (nodeLeft > documentCenter) return 0;
+    const nodeCenter = nodeLeft + node.width() / 2;
     const distance = Math.max(1, Math.abs(documentCenter - nodeCenter));
     return MULTIPLIER_CENTER_SCORE * (1.0 - distance / documentCenter);
 }
 
+function getWidthScore(node) {
+    return MULTIPLIER_WIDTH_SCORE * node.width() / body.width();
+}
+
 function getFontScore(node) {
     if (node.text().length < 5) return 0;
-    return MULTIPLIER_FONT_SCORE * Math.log(parseInt(node
-        .css("font-size")
-        .replace(/[^0-9]/g, "")
-    ));
+    const fontSize = parseFloat(
+        node.css("font-size").replace(/[^0-9\.]/g, "")
+    );
+    return MULTIPLIER_FONT_SCORE * (Math.min(40, fontSize) / 40);
+}
+
+function isVisible() {
+    const node = $(this);
+    if (node.height() < 5 || node.width() < 5) { console.log("too small"); return false; }
+    if (node.css("visibility") == "hidden") { console.log("visibility=hidden"); return false; }
+    if (node.css("display") == "none") { console.log("display=none"); return false; }
+    return true;
+}
+
+function getEssenceText(node) {
+    const text = node.contents().text().trim();
+    const firstFiveWords = text.split(" ").slice(0, 5);
+    return firstFiveWords.join(" ");
+}
+
+function findCurrentEssence() {
+    var maxScore = 0;
+    var newEssence;
+    if (DEBUG) {
+        console.log("Scan", $("span,h1,h2,h3,h4,a").filter(isContent).length, "candidates");
+    }
+    $("span,h1,h2,h3,h4,a").filter(isContent).each(function() {
+        const node = $(this);
+        const score = Math.round(100 * (
+            getTopScore(node) +
+            getCenterScore(node) +
+            getWidthScore(node) +
+            getFontScore(node)));
+        if (score > maxScore) {
+            newEssence = node;
+            maxScore = score;
+        }
+        if (DEBUG) {
+            showScores(node, score);
+        }
+    });
+    return newEssence;
 }
 
 function getEssence() {
     try {
+        essence = findCurrentEssence();
         const selection = getSelectedText();
-        if (selection) return selection;
-        var maxScore = 0;
-        essence = undefined;
-        $("span,h1,h2,h3,h4").filter(isContent).each(function() {
-            const node = $(this);
-            const score = Math.round(100 * (getTopScore(node) + getCenterScore(node) + getFontScore(node)));
-            if (score > maxScore) {
-                essence = node;
-                maxScore = score;
-            }
-        });
+        if (selection) {
+            return selection;
+        }
         if (essence) {
-            highlightEssence();
             essenceUrl = essence.closest("a").attr("href");
-            return essence.text();
+            if (!essenceUrl.match(/https?:\/\//)) {
+                if (essenceUrl.startsWith("/")) {
+                    essenceUrl = document.location.protocol + "//" + document.location.hostname + essenceUrl;
+                } else {
+                    essenceUrl = document.location.href + "/" + essenceUrl;
+                }
+                console.log(essenceUrl)
+            }
+            return getEssenceText(essence);
         }
         return "";
     } catch (error) {
@@ -130,22 +217,273 @@ function getEssence() {
     }
 }
 
-function highlightEssence() {
-    $("#ikke-highlight").remove();
-    if (!DEBUG || !essence) return;
-    PAGE_SAVER_IGNORE = true;
+function showScores(node, score) {
     $("<div>")
-        .attr("id", "ikke-highlight")
-        .appendTo($("body"))
-        .css("background-color", "transparent")
-        .css("border", "2px solid orange")
-        .css("z-index", 1000000)
-        .css("position", "absolute")
-        .css("width", essence.width())
-        .css("height", essence.height())
-        .css("left", essence.offset().left)
-        .css("top", essence.offset().top)
-    console.log("Ikke: essence is '" + essence.text() + "'");
+        .css({
+            position: "absolute",
+            top: node.offset().top,
+            left: node.offset().left,
+            width: node.width(),
+            height: node.height() + 12,
+            backgroundColor: "transparent",
+            color: "black",
+            border: "1px solid red"
+        })
+        .hover(
+            function() {
+                $(this)
+                    .css({
+                        backgroundColor: "white",
+                    })
+                    .text(score + " " +
+                        getTopScore(node).toFixed(1) + " " +
+                        getCenterScore(node).toFixed(1) + " " +
+                        getWidthScore(node).toFixed(1) + " " +
+                        getFontScore(node).toFixed(1)
+                    );
+            },
+            function() {
+                $(this)
+                    .css({
+                        backgroundColor: "transparent",
+                    })
+                    .text("");
+            },
+        )
+        .appendTo(body)
+}
+
+function get_icon(item) {
+    if (item.icon.startsWith("http")) {
+        return item.icon;
+    }
+    if (item.icon.startsWith("get")) {
+        return IKKE_URL + item.icon;
+    }
+    if (item.icon == "undefined") {
+        return IKKE_URL + "get?path=icons/blue-circle.png"
+    }
+    return IKKE_URL + "get?path=icons/browser-web-icon.png";
+}
+
+function createTitleItem(text) {
+    return $("<ikke-related-title>")
+        .css({
+            display: "block",
+            top: 0,
+            padding: MENU_ITEM_PADDING,
+            width: MENU_WIDTH - 2 * MENU_LEFT_PADDING,
+            height: MENU_ITEM_HEIGHT,
+            lineHeight: MENU_ITEM_HEIGHT + "px",
+            margin: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            border: "1px solid black",
+            borderWidth: 0,
+            borderBottomWidth: 1,
+        })
+        .text(text);
+}
+
+function createMenuItem(index) {
+    return $("<ikke-related-item>")
+        .css({
+            display: "block",
+            position: "absolute",
+            top: 3 * MENU_TOP_PADDING + (MENU_ITEM_HEIGHT + 2) * index,
+            backgroundColor: MENU_ITEM_BACKGROUND_COLOR,
+            color: MENU_ITEM_COLOR,
+            margin: 0,
+            padding: MENU_ITEM_PADDING,
+            width: MENU_WIDTH - 2 * MENU_LEFT_PADDING,
+            height: MENU_ITEM_HEIGHT,
+            overflow: "hidden",
+        })
+        .hover(
+            function() {
+                $(this).css({
+                    backgroundColor: MENU_ITEM_BACKGROUND_COLOR_HOVER,
+                    color: MENU_ITEM_COLOR_HOVER,
+                })
+            },
+            function() {
+                $(this).css({
+                    backgroundColor: MENU_ITEM_BACKGROUND_COLOR,
+                    color: MENU_ITEM_COLOR,
+                })
+            }
+        );
+}
+
+function createMenuItemLabel(text) {
+    return $("<ikke-related-name>")
+        .css({
+            display: "inline",
+            position: "absolute",
+            top: 0,
+            left: MENU_ICON_SIZE + 3 * MENU_ICON_PADDING,
+            backgroundColor: "transparent",
+            width: MENU_WIDTH - MENU_ICON_SIZE - 3 * MENU_ICON_PADDING,
+            height: MENU_ICON_SIZE,
+            lineHeight: MENU_ICON_SIZE + "px",
+            overflow: "hidden",
+            whiteSpace: "nowrap",
+            textOverflow: "ellipsis",
+            fontSize: MENU_FONT_SIZE,
+            fontFamily: MENU_FONT_NAME,
+        })
+        .text(text);
+}
+
+function getUrlAttributes(item) {
+    result = "";
+    Object.keys(item).forEach(function(key) {
+        result += "&" + encodeURIComponent(key) + "=" + encodeURIComponent(item[key]);
+    });
+    return result;
+}
+
+function openMenu() {
+    menuOpen = true;
+    const ikkeLink = createMenuItem(1)
+        .append(createMenuItemLabel('Show Ikke Graph...'))
+        .click(function() {
+            window.open(IKKE_URL + "?q=" + related.query);
+            closeMenu();
+        });
+    const googleLink = createMenuItem(2)
+        .append(createMenuItemLabel('Search with Google...'))
+        .click(function() {
+            window.open("https://google.com/search?q=" + related.query);
+            closeMenu();
+        });
+    $("ikke-background").remove();
+    const background = $("<ikke-background>")
+        .appendTo(body)
+        .css({
+            zIndex: 1999999997,
+            display: "block",
+            top: 0,
+            position: "fixed",
+            width: body.width(),
+            height: body.height(),
+            backgroundColor: "transparent",
+        })
+        .css({
+            backgroundColor: "rgb(225, 225, 225, 0.4)",
+        }, ANIMATION_SPEED_BACKGROUND)
+        .click(closeMenu)
+        .on("keydown", function(event) {
+            if (event.key == "Escape") {
+                showDot();
+            }
+        });
+    height = 3 * MENU_TOP_PADDING + (MENU_ITEM_HEIGHT + 2) * (related.items.length + MENU_HEADER_ITEM_COUNT);
+    dot
+        .appendTo(body)
+        .empty()
+        .append(createTitleItem("Ikke results for '" + related.query + "'"))
+        .css({
+            zIndex: 1999999998,
+            textAlign: "left",
+            backgroundColor: MENU_COLOR,
+            padding: MENU_PADDING,
+            borderRadius: MENU_BORDER_RADIUS,
+        })
+        .css({
+            width: MENU_WIDTH,
+            height: height,
+        }, ANIMATION_SPEED_MENU_OPEN)
+        .append(ikkeLink)
+        .append(googleLink);
+    const itemsContainer = $("<ikke-related-items>")
+        .css({
+            display: "block",
+            fontSize: 0,
+            margin: 0,
+            padding: 0,
+        })
+        .appendTo(dot);
+    related.items.forEach((item, index) => {
+        createMenuItem(index + MENU_HEADER_ITEM_COUNT)
+            .appendTo(itemsContainer)
+            .click(function() {
+                window.open("http://localhost:1964/render?query=" + related.query + getUrlAttributes(item));
+            })
+            .append(
+                $("<img>")
+                    .attr("src", get_icon(item))
+                    .css({
+                        position: "absolute",
+                        top: 0,
+                        width: MENU_ICON_SIZE,
+                        height: MENU_ICON_SIZE,
+                    }),
+                createMenuItemLabel(item.label || item.title)
+            );
+    });
+}
+
+function closeMenu() {
+    $("ikke-background").css({
+        backgroundColor: "transparent",
+    })
+    dot.css({
+        width: DOT_SIZE,
+        height: DOT_SIZE,
+    });
+    menuOpen = false;
+    showDot();
+}
+
+function showDot() {
+    if (menuOpen || !SHOW_DOT || !essence || !essence.offset() || !related.items || !related.items.length) {
+        return;
+    }
+    PAGE_SAVER_IGNORE = true;
+    if (!dot) {
+        dot = $("<ikke-dot>")
+            .attr("id", "ikke-dot")
+            .click(openMenu)
+            .css({
+                display: "block",
+                position: "absolute",
+                border: "1px solid grey",
+                zIndex: 1999999998,
+                overflow: "hidden",
+                width: DOT_SIZE,
+                height: DOT_SIZE,
+                lineHeight: DOT_SIZE + "px",
+                cursor: "pointer",
+                boxShadow: DOT_SHADOW,
+                color: DOT_COLOR,
+                fontFamily: DOT_FONT_NAME,
+                fontSize: DOT_FONT_SIZE,
+                fontWeight: "normal",
+                userSelect: "none",
+                left: -100,
+                right: -100,
+            });
+    }
+    $("ikke-background").remove();
+    dot
+        .css( {
+            textAlign: "center",
+            backgroundColor: "#fff2dd",
+            padding: 0,
+            width: 22,
+            height: 22,
+            borderRadius: 13,
+        })
+        .css({
+            opacity: 1,
+        })
+        .appendTo(body)
+        .text((related.items.length));
+    moveDotToPosition(
+        essence.offset().left + essence.width() - 5,
+        essence.offset().top + essence.height() / 2 - 12
+    );
 }
 
 function getTitle() {
@@ -167,75 +505,8 @@ function getEmails() {
     }
 }
 
-function showDot() {
-    $("#ikke-dot").remove();
-    if (!SHOW_DOT) return;
-    $("<div>")
-    $("<ikke_dot>")
-        .attr("id", "ikke-dot")
-        .appendTo($("body"))
-        .draggable({
-            containment: "parent",
-            scroll: false,
-            start: function() {
-                $(this).attr("dragging", "true");
-            },
-            drag: function() {
-                chrome.runtime.sendMessage({
-                    type: "set_dot_position",
-                    domain: document.location.hostname,
-                    right: $(window).width() - $(this).offset().left - $(this).width(), 
-                    top: $(this).offset().top,
-                })
-            },
-            stop: function() {
-                $(this).attr("dragging", "false");
-            },
-          })
-        .css("background-color", "#fff2dd")
-        .css("border", "1px solid grey")
-        .css("z-index", 1999999998)
-        .css("display", "block")
-        .css("position", "fixed")
-        .css("width", 22)
-        .css("height", 22)
-        .css("border-radius", 13)
-        .css("right", -25)
-        .css("top", 5)
-        .css("cursor", "pointer")
-        .css("box-shadow", "rgb(181 181 181) 0px 0px 9px 0px")
-        .append($("<ikke_dot_label>")
-            .css("position", "absolute")
-            .css("display", "block")
-            .css("background-color", "transparent")
-            .css("color", "#333")
-            .css("font-family", "Arial")
-            .css("font-size", 12)
-            .css("font-weight", "normal")
-            .css("user-select", "none")
-            .css("top", 4)
-            .css("left", 4)
-            .text("10")
-        );
-    positionDot();
-    console.log("Ikke: show dot");
-}
-
-function moveDotToPosition(right, top) {
-    if ($("#ikke-dot").attr("dragging") == "true") return;
-    console.log("moveDotToPosition", right, top);
-    $("#ikke-dot")
-        .css("right", Math.min($(window).width(), right))
-        .css("top", Math.min($(window).height(), top));
-}
-
-function positionDot() {
-    chrome.runtime.sendMessage({
-        type: "get_dot_position",
-        domain: document.location.hostname,
-    }, function(response) {
-        moveDotToPosition(response.right, response.top);
-    });
+function moveDotToPosition(left, top) {
+    dot.css({ left, top });
 }
 
 function savePageDetails(force) {
@@ -245,7 +516,7 @@ function savePageDetails(force) {
         return;
     }
     const data = {
-        type: 'save_page_details',
+        type: 'get-related-items',
         selection: getSelectedText(),
         title: getTitle(),
         image: getFirstBigImage(),
@@ -258,18 +529,45 @@ function savePageDetails(force) {
     const dataString = JSON.stringify(data);
     if (force == undefined && dataString == lastDataSent) return;
     lastDataSent = dataString;
-    chrome.runtime.sendMessage(data);
+    chrome.runtime.sendMessage(data, function(response) {
+        related = response;
+        showDot();
+    });
 }
 
 function isContent() {
     const node = $(this);
-    if (!node.isVisible()) return false;
-    if (!node.isInViewport()) return false;
-    if (node.closest("button").position()) return false;
-    if (node.attr("role") == "button") return false;
-    if (node.closest("*[role='button']").position()) return false;
-    if (node.attr("role") == "heading") return true;
-    if (node.prop("tagName") == "SPAN" && !node.css('font-weight').match(/bold|[56789][0-9][0-9]/)) return false;
+    if (!node.isVisible()) {
+        if (DEBUG && node.text().indexOf("Meyers") != -1) console.log("Not visible:", node);
+        return false;
+    }
+    if (!node.isInViewport()) {
+        if (DEBUG && node.text().indexOf("Meyers") != -1) console.log("Not in viewport:", node);
+        return false;
+    }
+    if (node.closest("button").isVisible()) {
+        if (DEBUG && node.text().indexOf("Meyers") != -1) console.log("Inside a not visible button:", node);
+        return false;
+    }
+    if (node.attr("role") == "button") {
+        if (DEBUG && node.text().indexOf("Meyers") != -1) console.log("Button:", node);
+        return false;
+    }
+    if (node.closest("*[role='button']").position()) {
+        if (DEBUG && node.text().indexOf("Meyers") != -1) console.log("Button parent:", node);
+        return false;
+    }
+    if (node.closest("header").isVisible()) {
+        return true;
+    }
+    if (node.attr("role") == "heading") {
+        if (DEBUG && node.text().indexOf("Meyers") != -1) console.log("Heading OK:", node);
+        return true;
+    }
+    if (node.prop("tagName") == "SPAN" && !node.css('font-weight').match(/bold|[56789][0-9][0-9]/)) {
+        if (DEBUG && node.text().indexOf("Meyers") != -1) console.log("Normal span:", node);
+        return false;
+    }
     return true;
 }
 
@@ -285,7 +583,7 @@ $.fn.isVisible = function() {
 $.fn.isInViewport = function() {
     const node = $(this);
     var elementTop = node.offset().top;
-    if ($(window).scrollTop()) elementTop -= 100; // focus less on header
+    if ($(window).scrollTop()) elementTop -= 50; // focus less on header
     var elementBottom = elementTop + node.outerHeight();
     var viewportTop = $(window).scrollTop();
     var viewportBottom = viewportTop + $(window).height();
@@ -301,25 +599,17 @@ if (window.self == window.top && !window.location.hostname.match("localhost")) {
     document.addEventListener('mouseup', schedulePageSaver);
     document.addEventListener('keyup', schedulePageSaver);
     window.addEventListener('scroll', schedulePageSaver);
-    $("body").on("DOMSubtreeModified", schedulePageSaver);
+    body.on("DOMSubtreeModified", schedulePageSaver);
     chrome.extension.onMessage.addListener(function(request, sender, sendResponse) {
         switch (request.type) {
-            case 'tab_changed':
+            case 'tab-changed':
                 savePageDetails(true);
-                break;
-            case 'update_dot_position':
-                console.log("update dot", request);
-                if (request.domain == document.location.hostname) {
-                    moveDotToPosition(parseInt(request.right), parseInt(request.top));
-                }
+                sendResponse(request.type + " handled.");
                 break;
             case 'show-ikke-dot':
                 SHOW_DOT = request.value == "true";
                 showDot();
-                break;
-            case 'debug-browser-extension':
-                DEBUG = request.value == "true";
-                highlightEssence();
+                sendResponse(request.type + " handled.");
                 break;
         }
     });
