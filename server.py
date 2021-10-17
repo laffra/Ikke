@@ -52,7 +52,7 @@ class Server(BaseHTTPRequestHandler):
             '/status': self.status,
             '/load': self.load,
             '/stopload': self.stop_loading,
-            '/save_page_details': self.save_page_details,
+            '/get_related_items': self.get_related_items,
             '/extensions': self.extensions,
             '/get': self.get_resource,
             '/get_image': self.get_image,
@@ -134,8 +134,10 @@ class Server(BaseHTTPRequestHandler):
             message = html
         try:
             self.wfile.write(message)
+        except TypeError:
+            pass # ignore
         except Exception as e:
-            logger.error('Client went away: %s' % e)
+            logger.error('Client went away: %s: %s' % (type(e), e))
 
     def get_index(self):
         html = self.jinja2_env.get_template('index.html').render({
@@ -242,7 +244,7 @@ class Server(BaseHTTPRequestHandler):
         logger.info("Open %s" % path)
         subprocess.call(['open', path])
 
-    def save_page_details(self):
+    def get_related_items(self):
         browser.save_image(
             self.args.get('url', ''),
             self.args.get('title', ''),
@@ -254,7 +256,6 @@ class Server(BaseHTTPRequestHandler):
             float(self.args.get('timestamp', datetime.datetime.utcnow().timestamp()))
         )
         self.notify_related()
-        self.respond('OK')
 
     def notify_related(self):
         query = re.sub("[^A-Za-z_0-9]", " ", self.args.get('essence', self.args.get('title', '')))
@@ -273,6 +274,10 @@ class Server(BaseHTTPRequestHandler):
         results = results[:30]
         results = sorted(results, key=lambda result: result.kind, reverse=True)
         pubsub.notify("related", query, results)
+        self.respond(json.dumps({
+            "query": query,
+            "items": results,
+        }))
 
     def get_file(self):
         try:
