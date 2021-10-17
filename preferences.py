@@ -15,7 +15,7 @@ class ChromePreferences:
         preferences_path = os.path.join(home, *get_preferences_path())
         with open(preferences_path) as fin:
             self.preferences = json.load(fin)
-        print("Loaded Chrome preferences from", preferences_path, self.preferences['account_info'])
+        print("Loaded Chrome preferences from", preferences_path)
 
     def get_language_profile(self):
         return [(l['language'], l['probability']) for l in self.get('language_profile').get('reading').get('preference')]
