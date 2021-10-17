@@ -34,27 +34,43 @@ Setup Ikke:
  * Visit "chrome://extensions" in your browser
  * Load the unpacked extension from the repo's "extension" folder.
 
+The first time Ikke runs, it performs post-setup tasks. One of the things Ikke needs is your approval to index your Google data, such as gmail, calendar, etc. Things that happen during the first run:
+   * A Google dialog is shown to give "Ikke Graph" access to your data.
+   * The "Ikke graph" app is not verified by Google, so you may get a scary warning. This is OK. Click on the 
+   "advanced" link and provide access. See below what happens next.
+   * The auth token received from Google is stored on your local machine under ~/IKKE.
+
+Your privacy is preserved:
+   * The "Ikke Graph" app can only access your data using the locally stored token. Therefore, it can only index your data on your local machine. 
+   * The token and all your indexed data are stored locally only. No one will have access to it, unless they run a program on your local machine and use the token.
+   * You will get an email and/or notification from Google saying "Ikke Graph was granted access to your Google Account"
+
 # Usage
 
 Run Ikke:
  * Run "python3 main.py"
 
-The first time Ikke runs, It needs to:
- * Get your approval to import your Google sources, such as gmail, calendar, etc.
-   * The "Ikke graph" app is not verified by Google, so you may get a scary warning
-   * The resulting token for this is stored on your local machine under ~/IKKE
-   * The "Ikke graph" app can only access your data using that token, so only on your local machine. The token and all your indexed data is stored locally only. No one will have access to it, unless they run a program on your local machine.
-   * You will get an email from Google saying "Ikke Graph was granted access to your Google Account"
- * Start elasticSearch. This takes a while.
-   * Currently, access to the locally running elasticsearch instance is not using authentication. So other applications running on your local machine may get access to the indexed information.
-
-Manage your settings:
-* Click on the statusbar number icon or see [Settings](http://localhost:1964/settings).
+Visit your settings:
+* Click on the statusbar number icon or see [Settings](http://localhost:1964/settings):
 ![Ikke Settings](images/screenshot-ikke-settings.png)
 * By default, Ikke will index your browser history.
 * To load other sources, such as gmail, hit the corresponding "Load" button. 
 * Optional: Enable the browser extension's "Dot".
 * Click on the IKKE logo to start a new search on the currently indexed data.
+
+Use the "Dot" to show related items:
+* Enable the feature in your settings (see above).
+* Go to a website and notice the dot appear, such as the one shown below next to Elon Musk saying "12":
+![Ikke Settings](images/screenshot-ikke-dot.png)
+* Click on the dot to discover the 12 related items to Elon Mush (this list is different for every user, of course):
+![Ikke Related Items](images/screenshot-ikke-related.png)
+* You can show an Ikke Graph for this result:
+![Ikke Graph](images/screenshot-ikke-graph.png)
+* Alternatively, any result in the list of related items can
+be clicked on and explored.
+
+You can always use the statusbar icon to explore related items as well:
+![Ikke Graph](images/screenshot-ikke-statusbar.png)
 
 # Uninstall
 
