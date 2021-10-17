@@ -105,7 +105,7 @@ class GMail(Importer):
         if body['size'] == 0:
             return '', [], ''
         mime_type = payload["mimeType"]
-        data = body['data'].encode('UTF8')
+        data = body['data'].encode('UTF8') if 'data' in body else ''
         return cls.parse_body(mime_type, data)
 
     @classmethod
@@ -302,7 +302,7 @@ def _render(args):
 
 def render(args):
     import re
-    words = args.get("query", "").split() + list(filter(lambda word: re.match("^[a-zA-Z]*$", word), args["subject"].split()))[:10]
+    words = list(filter(lambda word: re.match("^[a-zA-Z]*$", word), args["subject"].split()))[:10]
     logger.info(args["subject"])
     logger.info(words)
     url = 'https://mail.google.com/mail/u/0/#search/%s' % urllib.parse.quote(' '.join(words))
