@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 MAXIMUM_DAYS_LOAD = 20 * 365
 INITIAL_DAYS_LOAD = 365
-DAYS_LOAD = 1
+DAYS_LOAD = 31
 DAYS_TO_LOOK_INTO_THE_FUTURE = 14
 
 class Importer():
