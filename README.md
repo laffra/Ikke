@@ -64,10 +64,13 @@ Use the "Dot" to show related items:
 * Enable the feature in your settings (see above).
 * Go to a website and notice the dot appear, such as the one shown below next to Elon Musk saying "12":
 ![Ikke Settings](images/screenshot-ikke-dot.png)
-* Click on the dot to discover the 12 related items to Elon Mush (this list is different for every user, of course):
+
+* Click on the dot to discover the 12 related items to Elon Musk (this list is different for every user, of course):
 ![Ikke Related Items](images/screenshot-ikke-related.png)
+
 * You can show an Ikke Graph for this result:
 ![Ikke Graph](images/screenshot-ikke-graph.png)
+
 * Alternatively, any result in the list of related items can
 be clicked on and explored.
 
