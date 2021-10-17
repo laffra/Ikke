@@ -31,7 +31,8 @@ Setup Ikke:
  * Clone the repo and cd to its root
  * Optional: use a virtualenv
  * Run "python3 setup.py install"
- * Visit [Chrome Extension](chrome://extensions) and load the unpacked extension from the repo's "extension" folder.
+ * Visit "chrome://extensions" in your browser
+ * Load the unpacked extension from the repo's "extension" folder.
 
 # Usage
 
