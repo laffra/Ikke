@@ -1,0 +1,2 @@
+xpack.security.enabled: true
+discovery.type: single-node
