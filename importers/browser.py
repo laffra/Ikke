@@ -69,7 +69,7 @@ def process_url(rows):
             if n % 1000 == 0:
                 logger.debug('Add %s %s' % (title, url))
             if title:
-                save_image(url, title, '', get_favicon(url), '', adjust_chrome_timestamp(last_visit_time), force=True)
+                save_image(url, title, '', get_favicon(url), '', adjust_chrome_timestamp(last_visit_time), keywords=[])
 
 
 def get_favicon(url):
@@ -77,7 +77,7 @@ def get_favicon(url):
     return '%s://%s/favicon.ico' % (url.scheme, url.netloc)
 
 
-def save_image(url, title, image, favicon, selection, essence, keywords, timestamp=0, force=False):
+def save_image(url, title, image, favicon, selection, essence, keywords, timestamp=0):
     if is_meta_site(url):
         return
     domain = urlparse(url).netloc
