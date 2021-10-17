@@ -54,25 +54,33 @@ Run Ikke:
 
 Visit your settings:
 * Click on the statusbar number icon or see [Settings](http://localhost:1964/settings):
+
 ![Ikke Settings](images/screenshot-ikke-settings.png)
+
 * By default, Ikke will index your browser history.
 * To load other sources, such as gmail, hit the corresponding "Load" button. 
 * Optional: Enable the browser extension's "Dot".
 * Click on the IKKE logo to start a new search on the currently indexed data.
 
+# Using the Dot
+
 Use the "Dot" to show related items:
 * Enable the feature in your settings (see above).
 * Go to a website and notice the dot appear, such as the one shown below next to Elon Musk saying "12":
+
 ![Ikke Settings](images/screenshot-ikke-dot.png)
 
 * Click on the dot to discover the 12 related items to Elon Musk (this list is different for every user, of course):
+
 ![Ikke Related Items](images/screenshot-ikke-related.png)
 
-* You can show an Ikke Graph for this result:
+# Showing an Ikke Graph
+
+You can show an Ikke Graph from the Dot, the statusbar, and from its UI:
+
 ![Ikke Graph](images/screenshot-ikke-graph.png)
 
-* Alternatively, any result in the list of related items can
-be clicked on and explored.
+# Using the status bar icon
 
 You can always use the statusbar icon to explore related items as well:
 ![Ikke Graph](images/screenshot-ikke-statusbar.png)
