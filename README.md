@@ -50,6 +50,7 @@ The first time Ikke runs, It needs to:
 
 Manage your settings:
 * Click on the statusbar number icon or see [Settings](http://localhost:1964/settings).
+![Ikke Settings](images/screenshot-ikke-settings.png)
 * By default, Ikke will index your browser history.
 * To load other sources, such as gmail, hit the corresponding "Load" button. 
 * Optional: Enable the browser extension's "Dot".
