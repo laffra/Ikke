@@ -3,7 +3,7 @@ Easily find back all your data!
 
 # Features
 
-Ikke produces a local backup of all your data, with fast local search,
+Ikke produces a local backup of your (social) data, with fast local search,
 visualizing the connections between de data across various sources.
 
 Why the name Ikke?
@@ -13,7 +13,9 @@ Why the name Ikke?
 When [pronounced correctly](https://upload.wikimedia.org/wikipedia/commons/3/39/Nl-ikke.ogg),
 Ikke sounds a lot like the English word "ticket", if you remove the leading and trailing t's.
 
-# Architecture
+# How it works
+
+![Ikke Architecture](images/architecture.png)
 
 Ikke consists of various components:
  * Importers for data sources such as browser history, local downloads, gmail, git, etc.
