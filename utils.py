@@ -14,6 +14,9 @@ ITEMS_DIR = os.path.join(HOME_DIR, 'items')
 FILE_DIR = os.path.join(ITEMS_DIR, 'file')
 CONTACT_DIR = os.path.join(ITEMS_DIR, 'contact')
 
+if not os.path.exists(HOME_DIR):
+    os.mkdir(HOME_DIR)
+
 os.chdir(INSTALL_FOLDER)
 
 def get_timestamp(dt=None):
