@@ -6,3 +6,6 @@ token.pickle
 env/*
 build/*
 dist/*
+.eggs/*
+exe.egg-info/*
+install.egg-info/*
