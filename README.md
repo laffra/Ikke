@@ -80,10 +80,28 @@ You can show an Ikke Graph from the Dot, the statusbar, and from its UI:
 
 ![Ikke Graph](images/screenshot-ikke-graph.png)
 
+# Showing an Ikke Grid
+
+The graph is great to see a quick overview of the relationships between the data. 
+If you want to focus more on time and recency, the Ikke Grid may be a better UI:
+
+![Ikke Graph](images/screenshot-grid.png)
+
+The Grid and the Graph show the same information, sorted differently.
+
 # Using the status bar icon
 
 You can always use the statusbar icon to explore related items as well:
 ![Ikke Graph](images/screenshot-ikke-statusbar.png)
+
+# Using the context menu
+
+Inside Chrome, the Ikke Dot tries to guess the current "essence" of the page. It favors words
+that appear in the top-middle of the page and that have more "weight" than others.
+Sometimes, however, you will want to search for a word nearby. Simple right-mouse click on it
+to activate the context menu and use the Ikke menu item:
+
+![Ikke Graph](images/screenshot-context-menu.png)
 
 # Uninstall
 
