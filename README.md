@@ -92,14 +92,15 @@ The Grid and the Graph show the same information, sorted differently.
 # Using the status bar icon
 
 You can always use the statusbar icon to explore related items as well:
+
 ![Ikke Graph](images/screenshot-ikke-statusbar.png)
 
 # Using the context menu
 
 Inside Chrome, the Ikke Dot tries to guess the current "essence" of the page. It favors words
 that appear in the top-middle of the page and that have more "weight" than others.
-Sometimes, however, you will want to search for a word nearby. Simple right-mouse click on it
-to activate the context menu and use the Ikke menu item:
+Sometimes, however, you will want to search for a word nearby. Simply right-mouse click on it,
+or select some text first, and activate the context menu to use the Ikke menu item:
 
 ![Ikke Graph](images/screenshot-context-menu.png)
 
