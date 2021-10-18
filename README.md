@@ -33,8 +33,23 @@ Ikke consists of various components:
 
 Setup Ikke:
  * Clone the repo and cd to its root
- * Optional: use a virtualenv
- * Run "python3 setup.py install"
+ ```
+ git clone https://github.com/laffra/Ikke
+ cd Ikke
+ ```
+ * Set up a virtualenv
+ ```
+ python3 -m pip install virtualenv
+ python3 -m venv env_ikke
+ ```
+ * Activate the virtualenv you just created 
+ ```
+ source env_ikke/bin/activate
+ ```
+ * Run 
+ ```
+ python3 setup.py install
+ ```
  * Visit "chrome://extensions" in your browser
  * Load the unpacked extension from the repo's "extension" folder.
 
@@ -52,7 +67,9 @@ Your privacy is preserved:
 # Usage
 
 Run Ikke:
- * Run "python3 main.py"
+```
+python3 main.py
+```
 
 Visit your settings:
 * Click on the statusbar number icon or see [Settings](http://localhost:1964/settings):
