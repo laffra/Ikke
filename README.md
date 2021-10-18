@@ -46,7 +46,7 @@ Setup Ikke:
  ```
  source env_ikke/bin/activate
  ```
- * Run 
+ * Install elasticsearch and the python dependencies:
  ```
  python3 setup.py install
  ```
