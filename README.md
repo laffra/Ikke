@@ -15,7 +15,9 @@ Ikke sounds a lot like the English word "ticket", if you remove the leading and 
 
 # How it works
 
-![Ikke Architecture](images/architecture.png)
+<table><tr><td>
+    <img src="/images/architecture.png" />
+</td></tr></table>
 
 Ikke consists of various components:
  * Importers for data sources such as browser history, local downloads, gmail, git, etc.
