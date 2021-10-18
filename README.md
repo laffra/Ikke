@@ -57,7 +57,9 @@ Run Ikke:
 Visit your settings:
 * Click on the statusbar number icon or see [Settings](http://localhost:1964/settings):
 
-![Ikke Settings](images/screenshot-ikke-settings.png)
+<table><tr><td>
+<img src="images/screenshot-ikke-settings.png">
+</td></tr></table>
 
 * By default, Ikke will index your browser history.
 * To load other sources, such as gmail, hit the corresponding "Load" button. 
@@ -70,24 +72,32 @@ Use the "Dot" to show related items:
 * Enable the feature in your settings (see above).
 * Go to a website and notice the dot appear, such as the one shown below next to Elon Musk saying "12":
 
-![Ikke Settings](images/screenshot-ikke-dot.png)
+<table><tr><td>
+<img src="images/screenshot-ikke-dot.png">
+</td></tr></table>
 
 * Click on the dot to discover the 12 related items to Elon Musk (this list is different for every user, of course):
 
-![Ikke Related Items](images/screenshot-ikke-related.png)
+<table><tr><td>
+<img src="images/screenshot-ikke-related.png">
+</td></tr></table>
 
 # Showing an Ikke Graph
 
 You can show an Ikke Graph from the Dot, the statusbar, and from its UI:
 
-![Ikke Graph](images/screenshot-ikke-graph.png)
+<table><tr><td>
+<img src="images/screenshot-ikke-graph.png">
+</td></tr></table>
 
 # Showing an Ikke Grid
 
 The graph is great to see a quick overview of the relationships between the data. 
 If you want to focus more on time and recency, the Ikke Grid may be a better UI:
 
-![Ikke Graph](images/screenshot-grid.png)
+<table><tr><td>
+<img src="images/screenshot-grid.png">
+</td></tr></table>
 
 The Grid and the Graph show the same information, sorted differently.
 
@@ -95,7 +105,9 @@ The Grid and the Graph show the same information, sorted differently.
 
 You can always use the statusbar icon to explore related items as well:
 
-![Ikke Graph](images/screenshot-ikke-statusbar.png)
+<table><tr><td>
+<img src="images/screenshot-ikke-statusbar.png">
+</td></tr></table>
 
 # Using the context menu
 
@@ -104,7 +116,9 @@ that appear in the top-middle of the page and that have more "weight" than other
 Sometimes, however, you will want to search for a word nearby. Simply right-mouse click on it,
 or select some text first, and activate the context menu to use the Ikke menu item:
 
-![Ikke Graph](images/screenshot-context-menu.png)
+<table><tr><td>
+<img src="images/screenshot-context-menu.png">
+</td></tr></table>
 
 # Uninstall
 
