@@ -3,7 +3,7 @@ __pycache__/*.pyc
 token.pickle
 .vscode/.ropeproject/config.py
 .vscode/.ropeproject/objectdb
-env/*
+venv/*
 build/*
 dist/*
 .eggs/*
