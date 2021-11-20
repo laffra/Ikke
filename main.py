@@ -5,6 +5,7 @@ import os
 import threading
 import webbrowser
 import pubsub
+import pynsights
 from server import startServer
 
 faulthandler.enable()
@@ -129,9 +130,13 @@ class App(rumps.App):
             rumps.MenuItem("Ikke Settings", lambda _: self.settings()),
             rumps.MenuItem("Help", lambda _: self.help()),
             rumps.MenuItem("Report a Problem", lambda _: self.problem()),
-            rumps.MenuItem("Quit", rumps.quit_application)
+            rumps.MenuItem("Quit", self.quit),
         ]
         self.menu = menu_items
+    
+    def quit(self, sender=None):
+        pynsights.stop_tracing()
+        rumps.quit_application()
     
     def open_related(self, item):
         '''
