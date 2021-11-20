@@ -5,6 +5,7 @@ import datetime
 import logging
 import storage
 import sys
+import pynsights
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ class Importer():
     def load_items(self, days, start):
         pass
 
+    @pynsights.trace
     def load(self):
         try:
             settings['%s/loading' % self.kind] = True
@@ -58,6 +60,11 @@ class Importer():
         last_day_before = self.get_days(settings.get('%s/timestamp_before' % self.kind, datetime.datetime.utcnow().timestamp()))
         days_after = min(last_day_before, days_before + days) if days_before <= last_day_before else days_before + days
         days_after = max(1, days_after)
+        pynsights.annotate("[%s %d/%d]" % (
+            self.__class__.__name__,
+            days_after,
+            days_before
+        ))
         self.load_items(days_after, days_before)
 
     @classmethod
