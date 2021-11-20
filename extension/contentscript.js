@@ -26,7 +26,7 @@ const MINIMUM_IMAGE_WIDTH = 100;
 const NOMINAL_PAGE_HEIGHT = 1000.0
 const DOCUMENT_CENTER = 0.4;
 
-const PAGE_SAVER_TIMEOUT_MS = 100;
+const PAGE_SAVER_TIMEOUT_MS = 1000;
 
 const IKKE_URL = "http://localhost:1964/";
 
@@ -199,7 +199,7 @@ function getEssence() {
             return selection;
         }
         if (essence) {
-            essenceUrl = essence.closest("a").attr("href");
+            essenceUrl = essence.closest("a").attr("href") || "";
             if (!essenceUrl.match(/https?:\/\//)) {
                 if (essenceUrl.startsWith("/")) {
                     essenceUrl = document.location.protocol + "//" + document.location.hostname + essenceUrl;
@@ -592,13 +592,19 @@ $.fn.isInViewport = function() {
 
 if (window.self == window.top && !window.location.hostname.match("localhost")) {
     var pageSaver = setTimeout(savePageDetails, PAGE_SAVER_TIMEOUT_MS)
-    function schedulePageSaver() {
+    var userInteractedWithPage = false;
+    function schedulePageSaver(force) {
         clearTimeout(pageSaver);
+        if (!force && !userInteractedWithPage) {
+            return;
+        }
+        userInteractedWithPage = false
         pageSaver = setTimeout(savePageDetails, PAGE_SAVER_TIMEOUT_MS);
     }
-    document.addEventListener('mouseup', schedulePageSaver);
-    document.addEventListener('keyup', schedulePageSaver);
-    window.addEventListener('scroll', schedulePageSaver);
+    document.addEventListener('mousemove', () => { userInteractedWithPage = true; });
+    document.addEventListener('mouseup', () => schedulePageSaver(true));
+    document.addEventListener('keyup', () => schedulePageSaver(true));
+    window.addEventListener('scroll', () => schedulePageSaver(true));
     body.on("DOMSubtreeModified", schedulePageSaver);
     chrome.extension.onMessage.addListener(function(request, sender, sendResponse) {
         switch (request.type) {
