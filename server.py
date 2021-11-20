@@ -1,8 +1,10 @@
 import datetime
 import re
+
 from stopwords import is_stopword, remove_stopwords
 from storage import Storage
 import pubsub
+import memory
 
 from importers import INITIAL_DAYS_LOAD, browser
 from importers import contact
@@ -28,6 +30,8 @@ import sys
 import traceback
 import threading
 import utils
+
+import pynsights
 
 logger = logging.getLogger('server')
 
@@ -88,13 +92,16 @@ class Server(BaseHTTPRequestHandler):
             self.args = {}
 
     def settings(self):
+        pynsights.annotate("[settings]")
         html = self.jinja2_env.get_template('settings.html').render({
+            'memory': memory.usage(human=True),
             'location': utils.INSTALL_FOLDER,
             'kinds': graph.ALL_ITEM_KINDS[1:],
             'can_load_more': { kind: Storage.can_load_more(kind) for kind in graph.ALL_ITEM_KINDS[1:]},
             'can_delete': { kind: Storage.can_delete(kind) for kind in graph.ALL_ITEM_KINDS[1:]},
         })
         self.respond(html)
+        memory.check(memory.GB/2)
 
     def settings_set(self):
         key = self.args["key"]
@@ -164,6 +171,7 @@ class Server(BaseHTTPRequestHandler):
 
     def search(self):
         query = self.args.get('q', '')
+        pynsights.annotate("[search]")
         email = self.args['email']
         settings['query'] = query
         duration = self.args.get('duration', 'year')
@@ -178,12 +186,14 @@ class Server(BaseHTTPRequestHandler):
     def load(self):
         Storage.load(self.args['kind'])
         self.respond('OK')
+        memory.check(memory.GB/2)
 
     def poll(self):
         poller.poll()
 
     def get_graph(self):
         query = self.args.get('q')
+        pynsights.annotate("[graph]")
         keep_duplicates = self.args.get('d', '0') == '1'
         kind = self.args['kind']
         logger.info('get graph for %s: %s', kind, query)
@@ -207,6 +217,7 @@ class Server(BaseHTTPRequestHandler):
         self.respond(self.load_resource(path, 'rb'))
 
     def render(self):
+        pynsights.annotate("[render]")
         try:
             logger.info("render %s" % json.dumps(self.args, indent=4))
             handler = Storage.get_handler(self.args["kind"])
@@ -256,6 +267,7 @@ class Server(BaseHTTPRequestHandler):
             float(self.args.get('timestamp', datetime.datetime.utcnow().timestamp()))
         )
         self.notify_related()
+        memory.check(memory.GB/2)
 
     def notify_related(self):
         query = re.sub("[^A-Za-z_0-9]", " ", self.args.get('essence', self.args.get('title', '')))

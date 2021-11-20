@@ -4,12 +4,16 @@ import pkgutil
 import storage
 import time
 import threading
+import memory
 
 from importers import download
 
 logger = logging.getLogger(__name__)
 
 POLL_SLEEP_INTERVAL_SECONDS = 600
+POLL_SLEEP_INCREMENT_SECONDS = 60
+
+workers = []
 
 class Worker(threading.Thread):
 
@@ -17,15 +21,22 @@ class Worker(threading.Thread):
         super(Worker, self).__init__()
         self.importer = importer
         self.running = True
+        self.index = len(workers)
+        workers.append(self)
 
     def run(self):
+        delay = POLL_SLEEP_INCREMENT_SECONDS * self.index
+        logger.info("Staggered start %s for %d seconds" % (self.importer.__name__, delay))
+        time.sleep(delay)
         while self.running:
             self.sleep()
             self.poll()
+            memory.check(memory.GB/2)
 
     def sleep(self):
-        logger.info("Sleeping for %d seconds" % POLL_SLEEP_INTERVAL_SECONDS)
-        for n in range(POLL_SLEEP_INTERVAL_SECONDS):
+        delay = POLL_SLEEP_INTERVAL_SECONDS
+        logger.info("Sleeping %s for %d seconds" % (self.importer.__name__, delay))
+        for n in range(delay):
             time.sleep(1)
             if not self.running:
                 break
@@ -50,6 +61,8 @@ workers = [
     for _, name, _ in pkgutil.iter_modules(['importers'])
     if hasattr(importers, name)
 ]
+
+
 
 
 def poll():
