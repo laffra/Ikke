@@ -241,9 +241,9 @@ class Storage:
             os.mkdir(utils.HOME_DIR)
             os.chmod(utils.HOME_DIR, stat.S_IEXEC)
         try:
-            logging.getLogger('elasticsearch').setLevel(logging.WARNING)
-            os.environ["ES_PATH_CONF"] = os.path.join(os.getcwd(), "elasticsearch")
-            logger.info("Start ElasticSearch using settings from %s", os.environ["ES_PATH_CONF"])
+            logging.getLogger('elasticsearch').setLevel(logging.ERROR)
+            # os.environ["ES_PATH_CONF"] = os.path.join(os.getcwd(), "elasticsearch")
+            # logger.info("Start ElasticSearch using settings from %s", os.environ["ES_PATH_CONF"])
             subprocess.Popen("elasticsearch")
         except:
             logger.error("Cannot run elastic server")
